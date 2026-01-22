@@ -5,38 +5,37 @@ import { Trash2, Plus } from 'lucide-react';
 interface SettingsProps {
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
-  setMechanics: (m: MechanicDefinition[]) => void;
-  setServices: (s: ServiceDefinition[]) => void;
+  onAddMechanic: (name: string) => void;
+  onRemoveMechanic: (id: string) => void;
+  onAddService: (name: string) => void;
+  onRemoveService: (id: string) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ mechanics, services, setMechanics, setServices }) => {
+const Settings: React.FC<SettingsProps> = ({ 
+  mechanics, 
+  services, 
+  onAddMechanic, 
+  onRemoveMechanic,
+  onAddService,
+  onRemoveService
+}) => {
   const [newMech, setNewMech] = useState('');
   const [newService, setNewService] = useState('');
 
-  const addMechanic = (e: React.FormEvent) => {
+  const handleAddMechanic = (e: React.FormEvent) => {
     e.preventDefault();
     if (newMech) {
-      setMechanics([...mechanics, { id: Date.now().toString(), name: newMech }]);
+      onAddMechanic(newMech);
       setNewMech('');
     }
   };
 
-  const removeMechanic = (id: string) => {
-    // Removed native confirm dialog to ensure consistent functionality
-    setMechanics(mechanics.filter(m => m.id !== id));
-  };
-
-  const addService = (e: React.FormEvent) => {
+  const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
     if (newService) {
-      setServices([...services, { id: Date.now().toString(), name: newService }]);
+      onAddService(newService);
       setNewService('');
     }
-  };
-
-  const removeService = (id: string) => {
-    // Removed native confirm dialog to ensure consistent functionality
-    setServices(services.filter(s => s.id !== id));
   };
 
   return (
@@ -58,7 +57,7 @@ const Settings: React.FC<SettingsProps> = ({ mechanics, services, setMechanics, 
                 <span className="font-medium text-slate-700">{mech.name}</span>
                 <button 
                   type="button"
-                  onClick={() => removeMechanic(mech.id)}
+                  onClick={() => onRemoveMechanic(mech.id)}
                   className="text-slate-400 hover:text-red-500 transition-colors p-1"
                   title="Hapus Mekanik"
                 >
@@ -68,7 +67,7 @@ const Settings: React.FC<SettingsProps> = ({ mechanics, services, setMechanics, 
             ))}
           </ul>
 
-          <form onSubmit={addMechanic} className="flex gap-2">
+          <form onSubmit={handleAddMechanic} className="flex gap-2">
             <input 
               type="text" 
               value={newMech}
@@ -92,7 +91,7 @@ const Settings: React.FC<SettingsProps> = ({ mechanics, services, setMechanics, 
                 <span className="font-medium text-slate-700">{svc.name}</span>
                 <button 
                   type="button"
-                  onClick={() => removeService(svc.id)}
+                  onClick={() => onRemoveService(svc.id)}
                   className="text-slate-400 hover:text-red-500 transition-colors p-1"
                   title="Hapus Layanan"
                 >
@@ -102,7 +101,7 @@ const Settings: React.FC<SettingsProps> = ({ mechanics, services, setMechanics, 
             ))}
           </ul>
 
-          <form onSubmit={addService} className="flex gap-2">
+          <form onSubmit={handleAddService} className="flex gap-2">
             <input 
               type="text" 
               value={newService}

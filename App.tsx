@@ -7,10 +7,21 @@ import CustomerDisplay from './pages/CustomerDisplay';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import { Ticket, TicketStatus, MechanicDefinition, ServiceDefinition, Branch } from './types';
-import { getTickets, saveTickets, getMechanics, saveMechanics, getServices, saveServices } from './services/ticketService';
+import { 
+  subscribeToTickets, 
+  subscribeToMechanics, 
+  subscribeToServices,
+  addTicketToCloud,
+  updateTicketStatusInCloud,
+  updateTicketServicesInCloud,
+  addMechanicToCloud,
+  removeMechanicFromCloud,
+  addServiceToCloud,
+  removeServiceFromCloud
+} from './services/ticketService';
 import { MapPin } from 'lucide-react';
 
-// New Branch Selection Component
+// Branch Selection Component
 const BranchSelection = ({ onSelect }: { onSelect: (b: Branch) => void }) => (
   <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
     <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -50,7 +61,6 @@ const BranchSelection = ({ onSelect }: { onSelect: (b: Branch) => void }) => (
 
 function App() {
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(() => {
-    // Attempt to recover session branch
     return localStorage.getItem('daily_bike_selected_branch') as Branch | null;
   });
 
@@ -58,15 +68,24 @@ function App() {
   const [mechanics, setMechanics] = useState<MechanicDefinition[]>([]);
   const [services, setServices] = useState<ServiceDefinition[]>([]);
 
+  // Real-time subscriptions to Firestore
   useEffect(() => {
-    setTickets(getTickets());
-    setMechanics(getMechanics());
-    setServices(getServices());
-  }, []);
+    const unsubscribeTickets = subscribeToTickets((updatedTickets) => {
+      setTickets(updatedTickets);
+    });
+    const unsubscribeMechanics = subscribeToMechanics((updatedMechanics) => {
+      setMechanics(updatedMechanics);
+    });
+    const unsubscribeServices = subscribeToServices((updatedServices) => {
+      setServices(updatedServices);
+    });
 
-  useEffect(() => { if (tickets.length > 0) saveTickets(tickets); }, [tickets]);
-  useEffect(() => { saveMechanics(mechanics); }, [mechanics]);
-  useEffect(() => { saveServices(services); }, [services]);
+    return () => {
+      unsubscribeTickets();
+      unsubscribeMechanics();
+      unsubscribeServices();
+    };
+  }, []);
 
   const handleBranchSelect = (branch: Branch) => {
     setCurrentBranch(branch);
@@ -79,6 +98,7 @@ function App() {
   };
 
   // Filter tickets based on current branch
+  // Note: We sync ALL tickets but only display those matching the branch.
   const branchTickets = useMemo(() => {
     if (!currentBranch) return [];
     return tickets.filter(t => t.branch === currentBranch);
@@ -86,54 +106,29 @@ function App() {
 
   const addTicket = (name: string, phone: string, unit: string, svcs: string[], notes: string) => {
     if (!currentBranch) return;
-    
-    // Generate simple ID (global incremental for now, but filtered by view)
-    const newId = (Math.max(0, ...tickets.map(t => parseInt(t.id))) + 1).toString();
-    
-    const newTicket: Ticket = {
-      id: newId, 
-      branch: currentBranch, // Assign to current branch
-      customerName: name, 
-      unitSepeda: unit, 
-      phone: phone, 
-      serviceTypes: svcs,
-      mechanic: null, 
-      status: 'waiting', 
-      notes: notes,
-      timestamps: { arrival: new Date().toISOString(), called: null, ready: null, finished: null }
-    };
-    setTickets([...tickets, newTicket]);
+    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes);
   };
 
   const updateTicketStatus = (id: string, status: TicketStatus, mechanic?: string, notes?: string, reason?: string) => {
-    setTickets(prev => prev.map(t => {
-      if (t.id === id) {
-        const ts = { ...t.timestamps };
-        if (status === 'active' && t.status === 'waiting') ts.called = new Date().toISOString();
-        if (status === 'ready') ts.ready = new Date().toISOString();
-        if (status === 'done') ts.finished = new Date().toISOString();
-        return { 
-            ...t, status, 
-            mechanic: mechanic ?? t.mechanic, 
-            notes: notes ?? t.notes, 
-            cancellationReason: reason ?? t.cancellationReason,
-            timestamps: ts
-        };
-      }
-      return t;
-    }));
+    const ticketToUpdate = tickets.find(t => t.id === id);
+    if (!ticketToUpdate) return;
+    updateTicketStatusInCloud(id, ticketToUpdate, status, mechanic, notes, reason);
   };
 
   const updateTicketServices = (id: string, serviceTypes: string[]) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, serviceTypes } : t));
+    updateTicketServicesInCloud(id, serviceTypes);
   };
+
+  // Settings Handlers
+  const handleAddMechanic = (name: string) => addMechanicToCloud(name);
+  const handleRemoveMechanic = (id: string) => removeMechanicFromCloud(id);
+  const handleAddService = (name: string) => addServiceToCloud(name);
+  const handleRemoveService = (id: string) => removeServiceFromCloud(id);
 
   if (!currentBranch) {
     return <BranchSelection onSelect={handleBranchSelect} />;
   }
 
-  // Using MemoryRouter prevents 'Location.assign' errors in restricted blob/iframe environments
-  // while still maintaining SPA navigation behavior.
   return (
     <Router>
       <Layout currentBranch={currentBranch} onSwitchBranch={handleSwitchBranch}>
@@ -142,7 +137,19 @@ function App() {
           <Route path="/mechanic" element={<MechanicMode tickets={branchTickets} mechanics={mechanics} services={services} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
           <Route path="/display" element={<CustomerDisplay tickets={branchTickets} branch={currentBranch} />} />
           <Route path="/reports" element={<Reports tickets={branchTickets} />} />
-          <Route path="/settings" element={<Settings mechanics={mechanics} setMechanics={setMechanics} services={services} setServices={setServices} />} />
+          <Route 
+            path="/settings" 
+            element={
+              <Settings 
+                mechanics={mechanics} 
+                services={services} 
+                onAddMechanic={handleAddMechanic}
+                onRemoveMechanic={handleRemoveMechanic}
+                onAddService={handleAddService}
+                onRemoveService={handleRemoveService}
+              />
+            } 
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

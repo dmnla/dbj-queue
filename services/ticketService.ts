@@ -1,106 +1,154 @@
-import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
-import { Ticket, MechanicDefinition, ServiceDefinition } from "../types";
+import { db } from './firebaseConfig';
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  orderBy,
+  Timestamp 
+} from 'firebase/firestore';
+import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch } from "../types";
 
-const TICKET_KEY = 'daily_bike_jkt_tickets';
-const MECH_KEY = 'daily_bike_jkt_mechanics';
-const SERV_KEY = 'daily_bike_jkt_services';
+// --- Collection References ---
+const ticketsRef = collection(db, 'tickets');
+const mechanicsRef = collection(db, 'mechanics');
+const servicesRef = collection(db, 'services');
 
-// Initial data to show the multi-branch capability
-const INITIAL_DUMMY_DATA: Ticket[] = [
-  {
-    id: "1",
-    branch: 'mk',
-    customerName: "Budi (MK)",
-    unitSepeda: "Specialized Tarmac SL7",
-    phone: "08123456789",
-    serviceTypes: ["Full Bike Spa", "Brake Bleeding"],
-    mechanic: "Andi",
-    status: "active",
-    notes: "",
-    timestamps: {
-      arrival: new Date(new Date().setHours(14, 0)).toISOString(),
-      called: new Date(new Date().setHours(14, 15)).toISOString(),
-      ready: null,
-      finished: null
-    }
-  },
-  {
-    id: "2",
-    branch: 'mk',
-    customerName: "Siti (MK)",
-    unitSepeda: "Brompton M6L",
-    phone: "08198765432",
-    serviceTypes: ["Wheel Truing"],
+// --- Subscriptions (Real-time Read) ---
+
+export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
+  // Order by arrival time descending so newest are easy to find, 
+  // though the UI might sort them differently.
+  const q = query(ticketsRef, orderBy('timestamps.arrival', 'desc'));
+
+  return onSnapshot(q, (snapshot) => {
+    const tickets = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id, // Use Firestore Doc ID as the Ticket ID
+        branch: data.branch,
+        customerName: data.customerName,
+        unitSepeda: data.unitSepeda,
+        phone: data.phone,
+        serviceTypes: data.serviceTypes,
+        mechanic: data.mechanic,
+        status: data.status,
+        notes: data.notes,
+        cancellationReason: data.cancellationReason,
+        timestamps: data.timestamps
+      } as Ticket;
+    });
+    onUpdate(tickets);
+  }, (error) => {
+    console.error("Error subscribing to tickets:", error);
+  });
+};
+
+export const subscribeToMechanics = (onUpdate: (mechanics: MechanicDefinition[]) => void) => {
+  return onSnapshot(mechanicsRef, (snapshot) => {
+    const mechanics = snapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name
+    }));
+    onUpdate(mechanics);
+  });
+};
+
+export const subscribeToServices = (onUpdate: (services: ServiceDefinition[]) => void) => {
+  return onSnapshot(servicesRef, (snapshot) => {
+    const services = snapshot.docs.map(doc => ({
+      id: doc.id,
+      name: doc.data().name
+    }));
+    onUpdate(services);
+  });
+};
+
+// --- Cloud Actions (Write) ---
+
+export const addTicketToCloud = async (
+  branch: Branch,
+  customerName: string,
+  phone: string,
+  unitSepeda: string,
+  serviceTypes: string[],
+  notes: string
+) => {
+  const newTicket = {
+    branch,
+    customerName,
+    unitSepeda,
+    phone,
+    serviceTypes,
     mechanic: null,
-    status: "waiting",
-    notes: "",
+    status: 'waiting',
+    notes,
     timestamps: {
-      arrival: new Date(new Date().setHours(14, 30)).toISOString(),
+      arrival: new Date().toISOString(),
       called: null,
       ready: null,
       finished: null
     }
-  },
-  {
-    id: "3",
-    branch: 'pik',
-    customerName: "Robert (PIK)",
-    unitSepeda: "Cervelo S5",
-    phone: "08122233344",
-    serviceTypes: ["Build & Setup"],
-    mechanic: "Arif",
-    status: "active",
-    notes: "Handlebar width 40cm",
-    timestamps: {
-      arrival: new Date(new Date().setHours(10, 0)).toISOString(),
-      called: new Date(new Date().setHours(10, 15)).toISOString(),
-      ready: null,
-      finished: null
-    }
-  }
-];
-
-// --- Tickets ---
-// NOTE FOR CLOUD DEPLOYMENT:
-// To make this app work with a real Google Cloud backend, replace the localStorage calls below
-// with fetch() calls to your API endpoints (e.g., Google Cloud Functions or Cloud Run).
-// Example: return await fetch('https://api.dailybike.com/tickets').then(r => r.json());
-
-export const getTickets = (): Ticket[] => {
-  const stored = localStorage.getItem(TICKET_KEY);
-  if (!stored) {
-    localStorage.setItem(TICKET_KEY, JSON.stringify(INITIAL_DUMMY_DATA));
-    return INITIAL_DUMMY_DATA;
-  }
-  return JSON.parse(stored);
+  };
+  
+  await addDoc(ticketsRef, newTicket);
 };
 
-export const saveTickets = (tickets: Ticket[]) => {
-  localStorage.setItem(TICKET_KEY, JSON.stringify(tickets));
+export const updateTicketStatusInCloud = async (
+  id: string, 
+  currentTicket: Ticket, // We pass the current ticket to safely update timestamps based on logic
+  status: TicketStatus, 
+  mechanic?: string, 
+  notes?: string, 
+  reason?: string
+) => {
+  const ticketDocRef = doc(db, 'tickets', id);
+  const ts = { ...currentTicket.timestamps };
+  
+  // Logic to set timestamps based on status change
+  if (status === 'active' && currentTicket.status === 'waiting') ts.called = new Date().toISOString();
+  if (status === 'ready') ts.ready = new Date().toISOString();
+  if (status === 'done') ts.finished = new Date().toISOString();
+
+  const updates: any = {
+    status,
+    timestamps: ts
+  };
+
+  if (mechanic !== undefined) updates.mechanic = mechanic;
+  if (notes !== undefined) updates.notes = notes;
+  if (reason !== undefined) updates.cancellationReason = reason;
+
+  await updateDoc(ticketDocRef, updates);
 };
 
-// --- Settings ---
-export const getMechanics = (): MechanicDefinition[] => {
-  const stored = localStorage.getItem(MECH_KEY);
-  if (!stored) return DEFAULT_MECHANICS;
-  return JSON.parse(stored);
+export const updateTicketServicesInCloud = async (id: string, serviceTypes: string[]) => {
+  const ticketDocRef = doc(db, 'tickets', id);
+  await updateDoc(ticketDocRef, { serviceTypes });
 };
 
-export const saveMechanics = (mechanics: MechanicDefinition[]) => {
-  localStorage.setItem(MECH_KEY, JSON.stringify(mechanics));
+// --- Settings Management ---
+
+export const addMechanicToCloud = async (name: string) => {
+  await addDoc(mechanicsRef, { name });
 };
 
-export const getServices = (): ServiceDefinition[] => {
-  const stored = localStorage.getItem(SERV_KEY);
-  if (!stored) return DEFAULT_SERVICES;
-  return JSON.parse(stored);
+export const removeMechanicFromCloud = async (id: string) => {
+  await deleteDoc(doc(db, 'mechanics', id));
 };
 
-export const saveServices = (services: ServiceDefinition[]) => {
-  localStorage.setItem(SERV_KEY, JSON.stringify(services));
+export const addServiceToCloud = async (name: string) => {
+  await addDoc(servicesRef, { name });
 };
 
-// --- Helpers ---
+export const removeServiceFromCloud = async (id: string) => {
+  await deleteDoc(doc(db, 'services', id));
+};
+
+// --- Helpers (Pure Functions) ---
 export const formatTime = (isoString: string | null): string => {
   if (!isoString) return '-';
   const date = new Date(isoString);
