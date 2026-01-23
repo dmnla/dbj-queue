@@ -1,21 +1,21 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Use Environment Variables for security when deploying to GitHub/Vercel/Netlify
+// Create a .env file in your local root directory with these values.
+
+// Safely access environment variables.
+// We default to an empty object to prevent "env is undefined" errors if import.meta.env is missing.
+const env = (import.meta as any).env || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBm9-55KfxxbnBC89xBbXfoK2AHGzI2KoY",
-  authDomain: "dbj-queue.firebaseapp.com",
-  projectId: "dbj-queue",
-  storageBucket: "dbj-queue.firebasestorage.app",
-  messagingSenderId: "29922630063",
-  appId: "1:29922630063:web:c63e5883cd9aaa3108375a",
-  measurementId: "G-QJ00PN3SDF"
+  apiKey: env.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID",
+  appId: env.VITE_FIREBASE_APP_ID || "YOUR_APP_ID"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+export const db = getFirestore(app);

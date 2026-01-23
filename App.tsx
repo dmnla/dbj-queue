@@ -15,8 +15,10 @@ import {
   updateTicketStatusInCloud,
   updateTicketServicesInCloud,
   addMechanicToCloud,
+  updateMechanicInCloud,
   removeMechanicFromCloud,
   addServiceToCloud,
+  updateServiceInCloud,
   removeServiceFromCloud
 } from './services/ticketService';
 import { MapPin } from 'lucide-react';
@@ -97,12 +99,26 @@ function App() {
     localStorage.removeItem('daily_bike_selected_branch');
   };
 
-  // Filter tickets based on current branch
-  // Note: We sync ALL tickets but only display those matching the branch.
+  // --- Filtering Logic ---
+  
+  // 1. Filter tickets: only show tickets belonging to current branch
   const branchTickets = useMemo(() => {
     if (!currentBranch) return [];
     return tickets.filter(t => t.branch === currentBranch);
   }, [tickets, currentBranch]);
+
+  // 2. Filter Mechanics: only show mechanics assigned to current branch (or both)
+  const branchMechanics = useMemo(() => {
+    if (!currentBranch) return [];
+    return mechanics.filter(m => m.branches.includes(currentBranch));
+  }, [mechanics, currentBranch]);
+
+  // 3. Filter Services: only show services available in current branch (or both)
+  const branchServices = useMemo(() => {
+    if (!currentBranch) return [];
+    return services.filter(s => s.branches.includes(currentBranch));
+  }, [services, currentBranch]);
+
 
   const addTicket = (name: string, phone: string, unit: string, svcs: string[], notes: string) => {
     if (!currentBranch) return;
@@ -120,9 +136,12 @@ function App() {
   };
 
   // Settings Handlers
-  const handleAddMechanic = (name: string) => addMechanicToCloud(name);
+  const handleAddMechanic = (name: string, branches: Branch[]) => addMechanicToCloud(name, branches);
+  const handleUpdateMechanic = (id: string, name: string, branches: Branch[]) => updateMechanicInCloud(id, name, branches);
   const handleRemoveMechanic = (id: string) => removeMechanicFromCloud(id);
-  const handleAddService = (name: string) => addServiceToCloud(name);
+  
+  const handleAddService = (name: string, branches: Branch[]) => addServiceToCloud(name, branches);
+  const handleUpdateService = (id: string, name: string, branches: Branch[]) => updateServiceInCloud(id, name, branches);
   const handleRemoveService = (id: string) => removeServiceFromCloud(id);
 
   if (!currentBranch) {
@@ -133,19 +152,21 @@ function App() {
     <Router>
       <Layout currentBranch={currentBranch} onSwitchBranch={handleSwitchBranch}>
         <Routes>
-          <Route path="/" element={<Dashboard tickets={branchTickets} mechanics={mechanics} services={services} addTicket={addTicket} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
-          <Route path="/mechanic" element={<MechanicMode tickets={branchTickets} mechanics={mechanics} services={services} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
+          <Route path="/" element={<Dashboard tickets={branchTickets} mechanics={branchMechanics} services={branchServices} addTicket={addTicket} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
+          <Route path="/mechanic" element={<MechanicMode tickets={branchTickets} mechanics={branchMechanics} services={branchServices} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
           <Route path="/display" element={<CustomerDisplay tickets={branchTickets} branch={currentBranch} />} />
           <Route path="/reports" element={<Reports tickets={branchTickets} />} />
           <Route 
             path="/settings" 
             element={
               <Settings 
-                mechanics={mechanics} 
-                services={services} 
+                mechanics={mechanics} // Settings sees ALL mechanics to manage them
+                services={services}   // Settings sees ALL services to manage them
                 onAddMechanic={handleAddMechanic}
+                onUpdateMechanic={handleUpdateMechanic}
                 onRemoveMechanic={handleRemoveMechanic}
                 onAddService={handleAddService}
+                onUpdateService={handleUpdateService}
                 onRemoveService={handleRemoveService}
               />
             } 

@@ -4,11 +4,13 @@ export type Branch = 'mk' | 'pik'; // mk = Muara Karang, pik = PIK 2
 export interface ServiceDefinition {
   id: string;
   name: string;
+  branches: Branch[]; // Which branches offer this service
 }
 
 export interface MechanicDefinition {
   id: string;
   name: string;
+  branches: Branch[]; // Which branches this mechanic works at
 }
 
 export interface Timestamps {

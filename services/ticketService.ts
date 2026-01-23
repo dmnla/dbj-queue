@@ -8,7 +8,7 @@ import {
   doc, 
   query, 
   orderBy,
-  Timestamp 
+  runTransaction
 } from 'firebase/firestore';
 import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch } from "../types";
 
@@ -20,15 +20,14 @@ const servicesRef = collection(db, 'services');
 // --- Subscriptions (Real-time Read) ---
 
 export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
-  // Order by arrival time descending so newest are easy to find, 
-  // though the UI might sort them differently.
+  // Order by arrival time descending
   const q = query(ticketsRef, orderBy('timestamps.arrival', 'desc'));
 
   return onSnapshot(q, (snapshot) => {
     const tickets = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
-        id: doc.id, // Use Firestore Doc ID as the Ticket ID
+        id: doc.id, // Will now be "1", "2", etc.
         branch: data.branch,
         customerName: data.customerName,
         unitSepeda: data.unitSepeda,
@@ -49,20 +48,28 @@ export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
 
 export const subscribeToMechanics = (onUpdate: (mechanics: MechanicDefinition[]) => void) => {
   return onSnapshot(mechanicsRef, (snapshot) => {
-    const mechanics = snapshot.docs.map(doc => ({
-      id: doc.id,
-      name: doc.data().name
-    }));
+    const mechanics = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        branches: data.branches || ['mk', 'pik']
+      };
+    });
     onUpdate(mechanics);
   });
 };
 
 export const subscribeToServices = (onUpdate: (services: ServiceDefinition[]) => void) => {
   return onSnapshot(servicesRef, (snapshot) => {
-    const services = snapshot.docs.map(doc => ({
-      id: doc.id,
-      name: doc.data().name
-    }));
+    const services = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        branches: data.branches || ['mk', 'pik']
+      };
+    });
     onUpdate(services);
   });
 };
@@ -77,29 +84,52 @@ export const addTicketToCloud = async (
   serviceTypes: string[],
   notes: string
 ) => {
-  const newTicket = {
-    branch,
-    customerName,
-    unitSepeda,
-    phone,
-    serviceTypes,
-    mechanic: null,
-    status: 'waiting',
-    notes,
-    timestamps: {
-      arrival: new Date().toISOString(),
-      called: null,
-      ready: null,
-      finished: null
-    }
-  };
-  
-  await addDoc(ticketsRef, newTicket);
+  const counterRef = doc(db, 'settings', 'ticketCounter');
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
+      
+      let nextId = 1;
+      if (counterDoc.exists()) {
+        nextId = counterDoc.data().count + 1;
+      }
+
+      // 1. Increment the counter
+      transaction.set(counterRef, { count: nextId });
+
+      // 2. Create the ticket with the custom ID (e.g., "101")
+      // Pad with zeros if you want (e.g. 001), currently just integer string
+      const ticketId = String(nextId);
+      const ticketRef = doc(db, 'tickets', ticketId);
+
+      const newTicket = {
+        branch,
+        customerName,
+        unitSepeda,
+        phone,
+        serviceTypes,
+        mechanic: null,
+        status: 'waiting',
+        notes,
+        timestamps: {
+          arrival: new Date().toISOString(),
+          called: null,
+          ready: null,
+          finished: null
+        }
+      };
+
+      transaction.set(ticketRef, newTicket);
+    });
+  } catch (e) {
+    console.error("Transaction failed: ", e);
+  }
 };
 
 export const updateTicketStatusInCloud = async (
   id: string, 
-  currentTicket: Ticket, // We pass the current ticket to safely update timestamps based on logic
+  currentTicket: Ticket, 
   status: TicketStatus, 
   mechanic?: string, 
   notes?: string, 
@@ -108,7 +138,6 @@ export const updateTicketStatusInCloud = async (
   const ticketDocRef = doc(db, 'tickets', id);
   const ts = { ...currentTicket.timestamps };
   
-  // Logic to set timestamps based on status change
   if (status === 'active' && currentTicket.status === 'waiting') ts.called = new Date().toISOString();
   if (status === 'ready') ts.ready = new Date().toISOString();
   if (status === 'done') ts.finished = new Date().toISOString();
@@ -132,23 +161,33 @@ export const updateTicketServicesInCloud = async (id: string, serviceTypes: stri
 
 // --- Settings Management ---
 
-export const addMechanicToCloud = async (name: string) => {
-  await addDoc(mechanicsRef, { name });
+export const addMechanicToCloud = async (name: string, branches: Branch[]) => {
+  await addDoc(mechanicsRef, { name, branches });
+};
+
+export const updateMechanicInCloud = async (id: string, name: string, branches: Branch[]) => {
+  const docRef = doc(db, 'mechanics', id);
+  await updateDoc(docRef, { name, branches });
 };
 
 export const removeMechanicFromCloud = async (id: string) => {
   await deleteDoc(doc(db, 'mechanics', id));
 };
 
-export const addServiceToCloud = async (name: string) => {
-  await addDoc(servicesRef, { name });
+export const addServiceToCloud = async (name: string, branches: Branch[]) => {
+  await addDoc(servicesRef, { name, branches });
+};
+
+export const updateServiceInCloud = async (id: string, name: string, branches: Branch[]) => {
+  const docRef = doc(db, 'services', id);
+  await updateDoc(docRef, { name, branches });
 };
 
 export const removeServiceFromCloud = async (id: string) => {
   await deleteDoc(doc(db, 'services', id));
 };
 
-// --- Helpers (Pure Functions) ---
+// --- Helpers ---
 export const formatTime = (isoString: string | null): string => {
   if (!isoString) return '-';
   const date = new Date(isoString);

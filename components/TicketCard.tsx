@@ -1,7 +1,6 @@
 import React from 'react';
 import { Ticket } from '../types';
-import { Clock, User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, PlayCircle, CheckCircle } from 'lucide-react';
-import { formatTime } from '../services/ticketService';
+import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit } from 'lucide-react';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -51,13 +50,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
   const canEdit = ticket.status === 'waiting' || ticket.status === 'active' || ticket.status === 'pending';
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden`}>
+    <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full`}>
       
-      {/* Header */}
-      <div className="flex justify-between items-start gap-2">
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <span className="font-mono text-lg sm:text-xl font-black text-slate-400">#{ticket.id}</span>
-            <span className={`text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${
+      {/* Header Row */}
+      <div className="flex justify-between items-center gap-2 mb-1">
+        <div className="flex items-center gap-2">
+            <span className="font-mono text-xl sm:text-2xl font-black text-slate-400 tracking-tighter">#{ticket.id}</span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight ${
             ticket.status === 'active' ? 'bg-blue-100 text-blue-800' :
             ticket.status === 'pending' ? 'bg-orange-100 text-orange-800' :
             ticket.status === 'ready' ? 'bg-emerald-100 text-emerald-800' :
@@ -68,12 +67,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
             </span>
         </div>
         
-        <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+        {/* Top Right Action Buttons - Compact Icons */}
+        <div className="flex gap-1">
             {canEdit && onEditServices && (
                 <button 
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onEditServices(ticket); }}
-                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded border border-blue-100 transition-colors z-10"
+                    className="w-8 h-8 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full border border-blue-200 transition-colors"
                     title="Edit Services"
                 >
                     <Edit size={14} />
@@ -83,7 +83,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
                 <button 
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onCancel(ticket); }}
-                    className="p-1.5 text-red-500 hover:bg-red-50 rounded border border-red-100 transition-colors z-10"
+                    className="w-8 h-8 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 rounded-full border border-red-200 transition-colors"
                     title="Batalkan"
                 >
                     <Ban size={14} />
@@ -94,13 +94,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
 
       {/* Customer Info */}
       <div className="border-b border-slate-100 pb-2">
-        <h3 className="font-black text-base sm:text-lg text-slate-800 flex items-center gap-2 leading-tight break-words">
-          <User size={16} className="text-slate-300 flex-shrink-0" />
-          {ticket.customerName}
+        <h3 className="font-black text-base text-slate-800 flex items-start gap-2 leading-tight">
+          <User size={16} className="text-slate-300 flex-shrink-0 mt-0.5" />
+          <span className="line-clamp-1">{ticket.customerName}</span>
         </h3>
-        <p className="text-xs sm:text-sm font-bold text-blue-600 flex items-center gap-2 mt-1 uppercase italic break-words">
+        <p className="text-sm font-bold text-blue-600 flex items-center gap-2 mt-1 uppercase italic">
           <Bike size={14} className="text-orange-500 flex-shrink-0" />
-          {ticket.unitSepeda}
+          <span className="line-clamp-1">{ticket.unitSepeda}</span>
         </p>
         {!compact && ticket.phone && (
           <p className="text-[10px] text-slate-400 flex items-center gap-2 mt-1 ml-6">
@@ -110,13 +110,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
       </div>
 
       {/* Services List */}
-      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex-1">
         <div className="text-[9px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
             <Wrench size={10} /> Layanan:
         </div>
         <div className="flex flex-wrap gap-1">
             {ticket.serviceTypes.map((svc, idx) => (
-                <span key={idx} className="bg-white border border-slate-200 text-slate-700 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+                <span key={idx} className="bg-white border border-slate-200 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
                     {svc}
                 </span>
             ))}
@@ -131,7 +131,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
                     <button 
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onChangeMechanic(ticket); }}
-                        className="text-[9px] font-black bg-white border border-blue-200 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-50 flex items-center gap-1 z-10 uppercase"
+                        className="text-[9px] font-black bg-white border border-blue-200 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-50 flex items-center gap-1 uppercase"
                     >
                         <UserCog size={10} /> Ganti
                     </button>
@@ -141,37 +141,40 @@ const TicketCard: React.FC<TicketCardProps> = ({
       </div>
 
        {ticket.notes && (
-        <div className={`flex items-start gap-2 text-[11px] p-2 rounded border leading-snug ${ticket.status === 'pending' ? 'bg-orange-50 border-orange-100 text-orange-700' : 'bg-yellow-50 border-yellow-100 text-slate-600'}`}>
-          {ticket.status === 'pending' ? <AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> : <StickyNote size={14} className="mt-0.5 flex-shrink-0 text-yellow-600" />}
-          <span className="italic font-medium">"{ticket.notes}"</span>
+        <div className={`flex items-start gap-2 text-[10px] p-2 rounded border leading-snug ${ticket.status === 'pending' ? 'bg-orange-50 border-orange-100 text-orange-700' : 'bg-yellow-50 border-yellow-100 text-slate-600'}`}>
+          {ticket.status === 'pending' ? <AlertCircle size={12} className="mt-0.5 flex-shrink-0" /> : <StickyNote size={12} className="mt-0.5 flex-shrink-0 text-yellow-600" />}
+          <span className="italic font-medium line-clamp-2">"{ticket.notes}"</span>
         </div>
       )}
 
-      {/* Actions */}
-      <div className="pt-2 flex flex-col sm:flex-row gap-2 mt-auto">
-        {onAction && actionLabel && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onAction(ticket); }}
-            className={`flex-1 text-white text-xs font-black py-3 px-3 rounded-xl transition-all shadow-md active:scale-95 z-10 flex items-center justify-center gap-2 uppercase tracking-widest ${
-                actionLabel.includes('MULAI') || actionLabel.includes('PROSES') ? 'bg-green-600 hover:bg-green-700' : 
-                actionLabel.includes('SELESAI') || actionLabel.includes('DIAMBIL') ? 'bg-slate-900 hover:bg-black' :
-                actionLabel.includes('LANJUT') ? 'bg-blue-600 hover:bg-blue-700' :
-                'bg-slate-800 hover:bg-slate-900'
-            }`}
-          >
-            {actionLabel}
-          </button>
-        )}
-        {onSecondaryAction && secondaryActionLabel && (
-           <button
-           type="button"
-           onClick={(e) => { e.stopPropagation(); onSecondaryAction(ticket); }}
-           className="flex-1 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-black py-3 px-3 rounded-xl transition-all active:scale-95 z-10 uppercase tracking-widest shadow-sm"
-         >
-           {secondaryActionLabel}
-         </button>
-        )}
+      {/* Bottom Actions */}
+      <div className="pt-1 mt-auto">
+        <div className="flex gap-2">
+          {onSecondaryAction && secondaryActionLabel && (
+             <button
+             type="button"
+             onClick={(e) => { e.stopPropagation(); onSecondaryAction(ticket); }}
+             className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-[10px] font-black py-2 rounded-lg transition-all uppercase shadow-sm"
+           >
+             {secondaryActionLabel}
+           </button>
+          )}
+          
+          {onAction && actionLabel && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAction(ticket); }}
+              className={`flex-1 text-white text-[10px] sm:text-xs font-black py-2.5 px-2 rounded-lg transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide ${
+                  actionLabel.includes('MULAI') || actionLabel.includes('PROSES') ? 'bg-green-600 hover:bg-green-700' : 
+                  actionLabel.includes('SELESAI') || actionLabel.includes('DIAMBIL') ? 'bg-slate-900 hover:bg-black' :
+                  actionLabel.includes('LANJUT') ? 'bg-blue-600 hover:bg-blue-700' :
+                  'bg-slate-800 hover:bg-slate-900'
+              }`}
+            >
+              {actionLabel}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

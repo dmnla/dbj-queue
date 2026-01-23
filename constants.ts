@@ -1,18 +1,18 @@
 import { Ticket, ServiceDefinition, MechanicDefinition } from "./types";
 
 export const DEFAULT_SERVICES: ServiceDefinition[] = [
-  { id: '1', name: 'Full Bike Spa' },
-  { id: '2', name: 'Drivetrain Cleaning' },
-  { id: '3', name: 'Wheel Truing' },
-  { id: '4', name: 'Build & Setup' },
-  { id: '5', name: 'Brake Bleeding' },
-  { id: '6', name: 'Bottom Bracket Service' }
+  { id: '1', name: 'Full Bike Spa', branches: ['mk', 'pik'] },
+  { id: '2', name: 'Drivetrain Cleaning', branches: ['mk', 'pik'] },
+  { id: '3', name: 'Wheel Truing', branches: ['mk', 'pik'] },
+  { id: '4', name: 'Build & Setup', branches: ['mk', 'pik'] },
+  { id: '5', name: 'Brake Bleeding', branches: ['mk', 'pik'] },
+  { id: '6', name: 'Bottom Bracket Service', branches: ['mk', 'pik'] }
 ];
 
 export const DEFAULT_MECHANICS: MechanicDefinition[] = [
-  { id: '1', name: 'Andi' },
-  { id: '2', name: 'Wahyu' },
-  { id: '3', name: 'Arif' }
+  { id: '1', name: 'Andi', branches: ['mk', 'pik'] },
+  { id: '2', name: 'Wahyu', branches: ['mk', 'pik'] },
+  { id: '3', name: 'Arif', branches: ['mk', 'pik'] }
 ];
 
 export const INITIAL_DUMMY_DATA: Ticket[] = [
