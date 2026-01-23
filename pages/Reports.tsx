@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Ticket } from '../types';
 import { formatTime } from '../services/ticketService';
 import { Download, Search, Filter, ArrowUpDown, ChevronUp, ChevronDown, Copy, Calendar, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import * as XLSX from 'xlsx';
 
 interface ReportsProps {
   tickets: Ticket[];
