@@ -48,15 +48,20 @@ const TicketCard: React.FC<TicketCardProps> = ({
   };
 
   const canEdit = ticket.status === 'waiting' || ticket.status === 'active' || ticket.status === 'pending';
+  
+  // Check if ID is legacy (long) or new (short number)
+  const isLongId = ticket.id.length > 5;
 
   return (
     <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full`}>
       
       {/* Header Row */}
       <div className="flex justify-between items-center gap-2 mb-1">
-        <div className="flex items-center gap-2">
-            <span className="font-mono text-xl sm:text-2xl font-black text-slate-400 tracking-tighter">#{ticket.id}</span>
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight ${
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+            <span className={`font-mono font-black text-slate-400 tracking-tighter truncate ${isLongId ? 'text-xs' : 'text-xl sm:text-2xl'}`}>
+              #{ticket.id}
+            </span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight whitespace-nowrap ${
             ticket.status === 'active' ? 'bg-blue-100 text-blue-800' :
             ticket.status === 'pending' ? 'bg-orange-100 text-orange-800' :
             ticket.status === 'ready' ? 'bg-emerald-100 text-emerald-800' :
@@ -68,7 +73,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
         </div>
         
         {/* Top Right Action Buttons - Compact Icons */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 shrink-0">
             {canEdit && onEditServices && (
                 <button 
                     type="button"
@@ -76,7 +81,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
                     className="w-8 h-8 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full border border-blue-200 transition-colors"
                     title="Edit Services"
                 >
-                    <Edit size={14} />
+                    <Edit size={16} />
                 </button>
             )}
             {(ticket.status === 'waiting' || ticket.status === 'active') && onCancel && (
@@ -86,7 +91,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
                     className="w-8 h-8 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 rounded-full border border-red-200 transition-colors"
                     title="Batalkan"
                 >
-                    <Ban size={14} />
+                    <Ban size={16} />
                 </button>
             )}
         </div>
@@ -96,11 +101,11 @@ const TicketCard: React.FC<TicketCardProps> = ({
       <div className="border-b border-slate-100 pb-2">
         <h3 className="font-black text-base text-slate-800 flex items-start gap-2 leading-tight">
           <User size={16} className="text-slate-300 flex-shrink-0 mt-0.5" />
-          <span className="line-clamp-1">{ticket.customerName}</span>
+          <span className="line-clamp-1 break-all">{ticket.customerName}</span>
         </h3>
         <p className="text-sm font-bold text-blue-600 flex items-center gap-2 mt-1 uppercase italic">
           <Bike size={14} className="text-orange-500 flex-shrink-0" />
-          <span className="line-clamp-1">{ticket.unitSepeda}</span>
+          <span className="line-clamp-1 break-all">{ticket.unitSepeda}</span>
         </p>
         {!compact && ticket.phone && (
           <p className="text-[10px] text-slate-400 flex items-center gap-2 mt-1 ml-6">
@@ -154,7 +159,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
              <button
              type="button"
              onClick={(e) => { e.stopPropagation(); onSecondaryAction(ticket); }}
-             className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-[10px] font-black py-2 rounded-lg transition-all uppercase shadow-sm"
+             className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-[10px] font-black py-2 rounded-lg transition-all uppercase shadow-sm whitespace-nowrap"
            >
              {secondaryActionLabel}
            </button>
@@ -164,7 +169,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onAction(ticket); }}
-              className={`flex-1 text-white text-[10px] sm:text-xs font-black py-2.5 px-2 rounded-lg transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide ${
+              className={`flex-1 text-white text-xs font-black py-2.5 px-2 rounded-lg transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide whitespace-nowrap ${
                   actionLabel.includes('MULAI') || actionLabel.includes('PROSES') ? 'bg-green-600 hover:bg-green-700' : 
                   actionLabel.includes('SELESAI') || actionLabel.includes('DIAMBIL') ? 'bg-slate-900 hover:bg-black' :
                   actionLabel.includes('LANJUT') ? 'bg-blue-600 hover:bg-blue-700' :

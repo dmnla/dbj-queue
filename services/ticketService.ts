@@ -8,7 +8,9 @@ import {
   doc, 
   query, 
   orderBy,
-  runTransaction
+  runTransaction,
+  writeBatch,
+  getDocs
 } from 'firebase/firestore';
 import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch } from "../types";
 
@@ -99,7 +101,6 @@ export const addTicketToCloud = async (
       transaction.set(counterRef, { count: nextId });
 
       // 2. Create the ticket with the custom ID (e.g., "101")
-      // Pad with zeros if you want (e.g. 001), currently just integer string
       const ticketId = String(nextId);
       const ticketRef = doc(db, 'tickets', ticketId);
 
@@ -185,6 +186,31 @@ export const updateServiceInCloud = async (id: string, name: string, branches: B
 
 export const removeServiceFromCloud = async (id: string) => {
   await deleteDoc(doc(db, 'services', id));
+};
+
+export const resetDatabase = async () => {
+  if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA tiket dan mereset nomor antrian kembali ke 1. Apakah Anda yakin?")) return;
+
+  try {
+    const batch = writeBatch(db);
+    
+    // 1. Get all tickets
+    const snapshot = await getDocs(collection(db, 'tickets'));
+    snapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+
+    // 2. Reset Counter
+    const counterRef = doc(db, 'settings', 'ticketCounter');
+    batch.set(counterRef, { count: 0 });
+
+    await batch.commit();
+    alert("Database berhasil direset. Nomor tiket berikutnya akan dimulai dari 1.");
+    window.location.reload();
+  } catch (error) {
+    console.error("Error resetting DB:", error);
+    alert("Gagal mereset database. Cek console untuk detail.");
+  }
 };
 
 // --- Helpers ---
