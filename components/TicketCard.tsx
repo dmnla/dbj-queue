@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { Ticket } from '../types';
-import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit } from 'lucide-react';
+import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, Clock } from 'lucide-react';
+import { formatTime } from '../services/ticketService';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -151,6 +153,24 @@ const TicketCard: React.FC<TicketCardProps> = ({
           <span className="italic font-medium line-clamp-2">"{ticket.notes}"</span>
         </div>
       )}
+
+      {/* Timestamps Restored */}
+      <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono pt-1">
+        <div className="flex items-center gap-1" title="Jam Kedatangan">
+            <Clock size={10} />
+            <span>{formatTime(ticket.timestamps.arrival).split(' ')[1]}</span>
+        </div>
+        {ticket.timestamps.called && (
+             <div className="flex items-center gap-1 text-blue-500" title="Jam Mulai">
+                <span>→ {formatTime(ticket.timestamps.called).split(' ')[1]}</span>
+            </div>
+        )}
+        {ticket.timestamps.ready && (
+             <div className="flex items-center gap-1 text-emerald-500" title="Jam Selesai">
+                <span>→ {formatTime(ticket.timestamps.ready).split(' ')[1]}</span>
+            </div>
+        )}
+      </div>
 
       {/* Bottom Actions */}
       <div className="pt-1 mt-auto">

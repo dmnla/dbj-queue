@@ -1,3 +1,4 @@
+
 export type TicketStatus = 'waiting' | 'active' | 'pending' | 'ready' | 'done' | 'cancelled';
 export type Branch = 'mk' | 'pik'; // mk = Muara Karang, pik = PIK 2
 
@@ -41,4 +42,37 @@ export interface KpiData {
   ready: number;
   finished: number;
   cancelled: number;
+}
+
+// --- NEW TYPES FOR STORAGE & CUSTOMERS ---
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  bikes: string[]; // List of bike models owned
+}
+
+export type StorageStatus = 'vacant' | 'occupied' | 'on_ride';
+
+export interface StorageLog {
+  id: string;
+  action: 'check_in' | 'ride_out' | 'ride_return' | 'checkout';
+  timestamp: string;
+  notes?: string;
+  photo?: string; // Base64 string for the image
+}
+
+export interface StorageSlot {
+  id: string; // e.g. "A-01"
+  status: StorageStatus;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  bikeModel?: string;
+  inDate?: string; // ISO
+  expiryDate?: string; // ISO
+  notes?: string; // Defects or specific storage notes
+  lastActivity?: string; // ISO
+  history: StorageLog[]; // Log of activities
 }

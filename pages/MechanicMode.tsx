@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import { Ticket, MechanicDefinition, ServiceDefinition } from '../types';
 import TicketCard from '../components/TicketCard';
 import { PendingModal, EditServicesModal, AssignMechanicModal } from '../components/Modals';
-import { Wrench, CheckCircle, PackageCheck, PlayCircle, Layers, AlertCircle } from 'lucide-react';
+import { Wrench, CheckCircle, PackageCheck, PlayCircle, Layers, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 
 interface MechanicModeProps {
   tickets: Ticket[];
@@ -22,6 +23,7 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
   const [pendingModal, setPendingModal] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
   const [editModal, setEditModal] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
   const [assignModal, setAssignModal] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   const ongoingTickets = useMemo(() => {
     return tickets.filter(t => t.status === 'waiting' || t.status === 'active' || t.status === 'pending')
@@ -38,11 +40,23 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
   const handleEdit = (ticket: Ticket) => setEditModal({ isOpen: true, ticket });
   const handleChangeMechanic = (ticket: Ticket) => setAssignModal({ isOpen: true, ticket });
 
+  const toggleFullScreen = () => {
+      if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch((e) => console.log(e));
+          setIsFullScreen(true);
+      } else {
+          if (document.exitFullscreen) {
+              document.exitFullscreen();
+              setIsFullScreen(false);
+          }
+      }
+  };
+
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 md:space-y-8 pb-32">
+    <div className={`p-4 md:p-8 space-y-6 md:space-y-8 pb-32 ${isFullScreen ? 'min-h-screen bg-slate-100' : 'max-w-6xl mx-auto'}`}>
       
-      {/* Header View */}
-      <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border-2 border-slate-100 gap-4">
+      {/* Header View - Hide in FullScreen to maximize space, or simplify */}
+      <div className={`flex flex-col sm:flex-row items-center justify-between bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border-2 border-slate-100 gap-4 ${isFullScreen ? 'sticky top-2 z-50 shadow-xl' : ''}`}>
         <div className="flex items-center gap-3 md:gap-5 w-full sm:w-auto">
             <div className="bg-orange-100 p-3 md:p-4 rounded-xl md:rounded-2xl text-orange-600 shrink-0">
                 <Wrench size={24} className="md:w-8 md:h-8" />
@@ -54,13 +68,24 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                 </p>
             </div>
         </div>
-        <div className="bg-slate-100 px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl border-2 border-slate-200 w-full sm:w-auto text-center">
-            <span className="text-xl md:text-2xl font-black text-slate-700">{ongoingTickets.length}</span>
-            <span className="ml-2 text-[10px] font-black text-slate-400 uppercase">Unit Sedang Antri</span>
+        
+        <div className="flex items-center gap-4">
+            <button 
+                onClick={toggleFullScreen}
+                className="bg-slate-800 text-white p-3 rounded-xl hover:bg-slate-900 transition-colors shadow-lg"
+                title={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"}
+            >
+                {isFullScreen ? <Minimize2 size={24} /> : <Maximize2 size={24} />}
+            </button>
+
+            <div className="bg-slate-100 px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl border-2 border-slate-200 w-full sm:w-auto text-center">
+                <span className="text-xl md:text-2xl font-black text-slate-700">{ongoingTickets.length}</span>
+                <span className="ml-2 text-[10px] font-black text-slate-400 uppercase">Unit Sedang Antri</span>
+            </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+      <div className={`grid gap-4 md:gap-6 ${isFullScreen ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 lg:grid-cols-2'}`}>
         {ongoingTickets.length === 0 ? (
             <div className="col-span-full text-center py-20 md:py-32 bg-white rounded-[2rem] border-4 border-dashed border-slate-200">
                 <CheckCircle size={60} className="mx-auto mb-6 text-slate-200" />

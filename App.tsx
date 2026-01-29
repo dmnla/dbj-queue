@@ -6,11 +6,15 @@ import MechanicMode from './pages/MechanicMode';
 import CustomerDisplay from './pages/CustomerDisplay';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
-import { Ticket, TicketStatus, MechanicDefinition, ServiceDefinition, Branch } from './types';
+import StorageMode from './pages/StorageMode';
+import { Ticket, TicketStatus, MechanicDefinition, ServiceDefinition, Branch, Customer, StorageSlot } from './types';
 import { 
   subscribeToTickets, 
   subscribeToMechanics, 
   subscribeToServices,
+  subscribeToCustomers,
+  subscribeToStorage,
+  initializeStorageSlots,
   addTicketToCloud,
   updateTicketStatusInCloud,
   updateTicketServicesInCloud,
@@ -19,7 +23,9 @@ import {
   removeMechanicFromCloud,
   addServiceToCloud,
   updateServiceInCloud,
-  removeServiceFromCloud
+  removeServiceFromCloud,
+  updateCustomerInCloud,
+  removeCustomerFromCloud
 } from './services/ticketService';
 import { MapPin } from 'lucide-react';
 
@@ -69,6 +75,8 @@ function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [mechanics, setMechanics] = useState<MechanicDefinition[]>([]);
   const [services, setServices] = useState<ServiceDefinition[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [storageSlots, setStorageSlots] = useState<StorageSlot[]>([]);
 
   // Real-time subscriptions to Firestore
   useEffect(() => {
@@ -81,13 +89,31 @@ function App() {
     const unsubscribeServices = subscribeToServices((updatedServices) => {
       setServices(updatedServices);
     });
+    const unsubscribeCustomers = subscribeToCustomers((updatedCustomers) => {
+      setCustomers(updatedCustomers);
+    });
+    
+    // Storage is only really needed for PIK, but no harm subscribing always for now to keep code simple
+    // or conditional logic:
+    let unsubscribeStorage = () => {};
+    if (currentBranch === 'pik') {
+       unsubscribeStorage = subscribeToStorage((slots) => {
+          setStorageSlots(slots);
+          // If empty, initialize
+          if (slots.length === 0) {
+             initializeStorageSlots();
+          }
+       });
+    }
 
     return () => {
       unsubscribeTickets();
       unsubscribeMechanics();
       unsubscribeServices();
+      unsubscribeCustomers();
+      unsubscribeStorage();
     };
-  }, []);
+  }, [currentBranch]);
 
   const handleBranchSelect = (branch: Branch) => {
     setCurrentBranch(branch);
@@ -120,9 +146,9 @@ function App() {
   }, [services, currentBranch]);
 
 
-  const addTicket = (name: string, phone: string, unit: string, svcs: string[], notes: string) => {
+  const addTicket = (name: string, phone: string, unit: string, svcs: string[], notes: string, customerId?: string) => {
     if (!currentBranch) return;
-    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes);
+    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId);
   };
 
   const updateTicketStatus = (id: string, status: TicketStatus, mechanic?: string, notes?: string, reason?: string) => {
@@ -144,6 +170,14 @@ function App() {
   const handleUpdateService = (id: string, name: string, branches: Branch[]) => updateServiceInCloud(id, name, branches);
   const handleRemoveService = (id: string) => removeServiceFromCloud(id);
 
+  // Customer Handlers
+  const handleUpdateCustomer = (id: string, name: string, phone: string, bikes: string[]) => {
+      updateCustomerInCloud(id, name, phone, bikes);
+  };
+  const handleRemoveCustomer = (id: string) => {
+      removeCustomerFromCloud(id);
+  };
+
   if (!currentBranch) {
     return <BranchSelection onSelect={handleBranchSelect} />;
   }
@@ -152,22 +186,30 @@ function App() {
     <Router>
       <Layout currentBranch={currentBranch} onSwitchBranch={handleSwitchBranch}>
         <Routes>
-          <Route path="/" element={<Dashboard tickets={branchTickets} mechanics={branchMechanics} services={branchServices} addTicket={addTicket} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
+          <Route path="/" element={<Dashboard tickets={branchTickets} mechanics={branchMechanics} services={branchServices} customers={customers} addTicket={addTicket} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
           <Route path="/mechanic" element={<MechanicMode tickets={branchTickets} mechanics={branchMechanics} services={branchServices} updateTicketStatus={updateTicketStatus} updateTicketServices={updateTicketServices} />} />
+          
+          {currentBranch === 'pik' && (
+             <Route path="/storage" element={<StorageMode slots={storageSlots} customers={customers} />} />
+          )}
+
           <Route path="/display" element={<CustomerDisplay tickets={branchTickets} branch={currentBranch} />} />
           <Route path="/reports" element={<Reports tickets={branchTickets} />} />
           <Route 
             path="/settings" 
             element={
               <Settings 
-                mechanics={mechanics} // Settings sees ALL mechanics to manage them
-                services={services}   // Settings sees ALL services to manage them
+                mechanics={mechanics} 
+                services={services}
+                customers={customers}
                 onAddMechanic={handleAddMechanic}
                 onUpdateMechanic={handleUpdateMechanic}
                 onRemoveMechanic={handleRemoveMechanic}
                 onAddService={handleAddService}
                 onUpdateService={handleUpdateService}
                 onRemoveService={handleRemoveService}
+                onUpdateCustomer={handleUpdateCustomer}
+                onRemoveCustomer={handleRemoveCustomer}
               />
             } 
           />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MonitorPlay, FileBarChart, Bike, Settings, Wrench, MapPin } from 'lucide-react';
+import { LayoutDashboard, MonitorPlay, FileBarChart, Bike, Settings, Wrench, MapPin, Warehouse } from 'lucide-react';
 import { Branch } from '../types';
 
 interface LayoutProps {
@@ -42,6 +42,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentBranch, onSwitchBranch
         <nav className="flex md:flex-col overflow-x-auto no-scrollbar md:overflow-x-visible p-2 md:p-4 md:space-y-2 flex-1 bg-brand-dark">
           <NavItem to="/" icon={<LayoutDashboard size={18} />} label="Admin" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
           <NavItem to="/mechanic" icon={<Wrench size={18} />} label="Mekanik" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
+          
+          {/* STORAGE MODE - ONLY FOR PIK */}
+          {!isMK && (
+            <NavItem to="/storage" icon={<Warehouse size={18} />} label="Storage" branchColorClass="bg-purple-600" />
+          )}
+
           <NavItem to="/display" icon={<MonitorPlay size={18} />} label="Layar TV" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
           <NavItem to="/reports" icon={<FileBarChart size={18} />} label="Laporan" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
           <div className="hidden md:block pt-4 mt-4 border-t border-slate-700">

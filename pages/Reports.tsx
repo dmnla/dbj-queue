@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Ticket } from '../types';
 import { formatTime } from '../services/ticketService';
@@ -25,7 +26,13 @@ const Reports: React.FC<ReportsProps> = ({ tickets }) => {
   const filteredAndSortedTickets = useMemo(() => {
     return tickets
       .filter(t => {
-        const matchesSearch = t.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || t.id.includes(searchTerm);
+        const lowerSearch = searchTerm.toLowerCase();
+        // SEARCH LOGIC UPDATED: Now checks ID, Customer Name, and Unit Sepeda
+        const matchesSearch = 
+            t.customerName.toLowerCase().includes(lowerSearch) || 
+            t.id.includes(lowerSearch) ||
+            t.unitSepeda.toLowerCase().includes(lowerSearch);
+            
         const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
         const matchesMechanic = mechanicFilter === 'all' || t.mechanic === mechanicFilter;
         let matchesDate = true;
@@ -149,8 +156,8 @@ const Reports: React.FC<ReportsProps> = ({ tickets }) => {
       <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <div className="flex flex-col gap-1 lg:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 flex items-center gap-1"><Search size={10}/> Cari Pelanggan / ID</label>
-                <input type="text" placeholder="Ketik nama atau nomor tiket..." className={inputStyle} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 flex items-center gap-1"><Search size={10}/> Cari Pelanggan / ID / Sepeda</label>
+                <input type="text" placeholder="Ketik nama, no tiket, atau sepeda..." className={inputStyle} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 flex items-center gap-1"><Calendar size={10}/> Dari Tanggal</label>

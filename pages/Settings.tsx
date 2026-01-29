@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { MechanicDefinition, ServiceDefinition, Branch } from '../types';
-import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle } from 'lucide-react';
+import { MechanicDefinition, ServiceDefinition, Branch, Customer } from '../types';
+import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle, Search, User } from 'lucide-react';
 import { resetDatabase } from '../services/ticketService';
+import { EditCustomerModal } from '../components/Modals';
 
 interface SettingsProps {
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
+  customers: Customer[]; // Added
   onAddMechanic: (name: string, branches: Branch[]) => void;
   onUpdateMechanic: (id: string, name: string, branches: Branch[]) => void;
   onRemoveMechanic: (id: string) => void;
   onAddService: (name: string, branches: Branch[]) => void;
   onUpdateService: (id: string, name: string, branches: Branch[]) => void;
   onRemoveService: (id: string) => void;
+  onUpdateCustomer: (id: string, name: string, phone: string, bikes: string[]) => void; // Added
+  onRemoveCustomer: (id: string) => void; // Added
 }
 
 interface EditableItemProps { 
@@ -122,14 +126,19 @@ const EditableItem: React.FC<EditableItemProps> = ({
 
 const Settings: React.FC<SettingsProps> = ({ 
   mechanics, 
-  services, 
+  services,
+  customers,
   onAddMechanic, 
   onUpdateMechanic,
   onRemoveMechanic,
   onAddService,
   onUpdateService,
-  onRemoveService
+  onRemoveService,
+  onUpdateCustomer,
+  onRemoveCustomer
 }) => {
+  const [activeTab, setActiveTab] = useState<'general' | 'customers'>('general');
+
   // Mechanic State
   const [newMech, setNewMech] = useState('');
   const [mechBranches, setMechBranches] = useState<Branch[]>(['mk', 'pik']);
@@ -139,7 +148,12 @@ const Settings: React.FC<SettingsProps> = ({
   const [newService, setNewService] = useState('');
   const [serviceBranches, setServiceBranches] = useState<Branch[]>(['mk', 'pik']);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  
+  // Customer DB State
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
+  // Helpers
   const toggleBranch = (
     current: Branch[], 
     setter: React.Dispatch<React.SetStateAction<Branch[]>>, 
@@ -167,13 +181,38 @@ const Settings: React.FC<SettingsProps> = ({
       setNewService('');
     }
   };
+  
+  // Customer Filter Logic
+  const filteredCustomers = customers.filter(c => {
+      const q = customerSearch.toLowerCase();
+      return c.name.toLowerCase().includes(q) || 
+             c.phone.includes(q) || 
+             c.bikes.some(b => b.toLowerCase().includes(q));
+  });
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8 pb-32">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Pengaturan</h2>
-        <p className="text-slate-500">Kelola daftar mekanik dan jenis layanan per cabang</p>
-      </div>
+    <div className="p-6 max-w-5xl mx-auto space-y-6 pb-32">
+       {/* Header & Tabs */}
+       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+                <h2 className="text-2xl font-bold text-slate-800">Pengaturan System</h2>
+                <p className="text-slate-500">Kelola master data bengkel dan pelanggan</p>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button 
+                    onClick={() => setActiveTab('general')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    General
+                </button>
+                <button 
+                    onClick={() => setActiveTab('customers')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'customers' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Database Pelanggan
+                </button>
+            </div>
+        </div>
 
       {/* Danger Zone */}
       <div className="bg-red-50 p-6 rounded-lg border-2 border-red-100 flex items-center justify-between">
@@ -189,107 +228,188 @@ const Settings: React.FC<SettingsProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* Mechanics Section */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col h-[500px]">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="bg-slate-800 text-white p-1 rounded">
-              <MapPin size={14}/>
-            </span>
-            Daftar Mekanik
-          </h3>
-          
-          <ul className="space-y-2 mb-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-            {mechanics.map(mech => (
-              <EditableItem 
-                key={mech.id} 
-                item={mech} 
-                onSave={onUpdateMechanic} 
-                onDelete={onRemoveMechanic}
-                isEditing={editingMechId === mech.id}
-                setEditingId={setEditingMechId}
-              />
-            ))}
-          </ul>
-
-          <form onSubmit={handleAddMechanic} className="space-y-3 pt-4 border-t border-slate-100">
-            <p className="text-xs font-bold text-slate-400 uppercase">Tambah Baru</p>
-            <input 
-              type="text" 
-              value={newMech}
-              onChange={(e) => setNewMech(e.target.value)}
-              placeholder="Nama Mekanik..."
-              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
+      {activeTab === 'general' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             
-            <div className="flex gap-4">
-               <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={mechBranches.includes('mk')} onChange={() => toggleBranch(mechBranches, setMechBranches, 'mk')} className="accent-blue-600 w-4 h-4" />
-                  MK
-               </label>
-               <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={mechBranches.includes('pik')} onChange={() => toggleBranch(mechBranches, setMechBranches, 'pik')} className="accent-emerald-600 w-4 h-4" />
-                  PIK
-               </label>
+            {/* Mechanics Section */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col h-[500px]">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span className="bg-slate-800 text-white p-1 rounded">
+                <MapPin size={14}/>
+                </span>
+                Daftar Mekanik
+            </h3>
+            
+            <ul className="space-y-2 mb-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                {mechanics.map(mech => (
+                <EditableItem 
+                    key={mech.id} 
+                    item={mech} 
+                    onSave={onUpdateMechanic} 
+                    onDelete={onRemoveMechanic}
+                    isEditing={editingMechId === mech.id}
+                    setEditingId={setEditingMechId}
+                />
+                ))}
+            </ul>
+
+            <form onSubmit={handleAddMechanic} className="space-y-3 pt-4 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase">Tambah Baru</p>
+                <input 
+                type="text" 
+                value={newMech}
+                onChange={(e) => setNewMech(e.target.value)}
+                placeholder="Nama Mekanik..."
+                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                
+                <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
+                    <input type="checkbox" checked={mechBranches.includes('mk')} onChange={() => toggleBranch(mechBranches, setMechBranches, 'mk')} className="accent-blue-600 w-4 h-4" />
+                    MK
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
+                    <input type="checkbox" checked={mechBranches.includes('pik')} onChange={() => toggleBranch(mechBranches, setMechBranches, 'pik')} className="accent-emerald-600 w-4 h-4" />
+                    PIK
+                </label>
+                </div>
+
+                <button type="submit" disabled={!newMech || mechBranches.length === 0} className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus size={20} className="mx-auto" />
+                </button>
+            </form>
             </div>
 
-            <button type="submit" disabled={!newMech || mechBranches.length === 0} className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-              <Plus size={20} className="mx-auto" />
-            </button>
-          </form>
-        </div>
-
-        {/* Services Section */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col h-[500px]">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="bg-slate-800 text-white p-1 rounded">
-              <MapPin size={14}/>
-            </span>
-            Jenis Layanan
-          </h3>
-          
-          <ul className="space-y-2 mb-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-            {services.map(svc => (
-              <EditableItem 
-                key={svc.id} 
-                item={svc} 
-                onSave={onUpdateService} 
-                onDelete={onRemoveService}
-                isEditing={editingServiceId === svc.id}
-                setEditingId={setEditingServiceId}
-              />
-            ))}
-          </ul>
-
-          <form onSubmit={handleAddService} className="space-y-3 pt-4 border-t border-slate-100">
-             <p className="text-xs font-bold text-slate-400 uppercase">Tambah Baru</p>
-            <input 
-              type="text" 
-              value={newService}
-              onChange={(e) => setNewService(e.target.value)}
-              placeholder="Nama Layanan..."
-              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
+            {/* Services Section */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col h-[500px]">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span className="bg-slate-800 text-white p-1 rounded">
+                <MapPin size={14}/>
+                </span>
+                Jenis Layanan
+            </h3>
             
-            <div className="flex gap-4">
-               <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={serviceBranches.includes('mk')} onChange={() => toggleBranch(serviceBranches, setServiceBranches, 'mk')} className="accent-blue-600 w-4 h-4" />
-                  MK
-               </label>
-               <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={serviceBranches.includes('pik')} onChange={() => toggleBranch(serviceBranches, setServiceBranches, 'pik')} className="accent-emerald-600 w-4 h-4" />
-                  PIK
-               </label>
+            <ul className="space-y-2 mb-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                {services.map(svc => (
+                <EditableItem 
+                    key={svc.id} 
+                    item={svc} 
+                    onSave={onUpdateService} 
+                    onDelete={onRemoveService}
+                    isEditing={editingServiceId === svc.id}
+                    setEditingId={setEditingServiceId}
+                />
+                ))}
+            </ul>
+
+            <form onSubmit={handleAddService} className="space-y-3 pt-4 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase">Tambah Baru</p>
+                <input 
+                type="text" 
+                value={newService}
+                onChange={(e) => setNewService(e.target.value)}
+                placeholder="Nama Layanan..."
+                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                
+                <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
+                    <input type="checkbox" checked={serviceBranches.includes('mk')} onChange={() => toggleBranch(serviceBranches, setServiceBranches, 'mk')} className="accent-blue-600 w-4 h-4" />
+                    MK
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
+                    <input type="checkbox" checked={serviceBranches.includes('pik')} onChange={() => toggleBranch(serviceBranches, setServiceBranches, 'pik')} className="accent-emerald-600 w-4 h-4" />
+                    PIK
+                </label>
+                </div>
+
+                <button type="submit" disabled={!newService || serviceBranches.length === 0} className="w-full bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus size={20} className="mx-auto" />
+                </button>
+            </form>
+            </div>
+        </div>
+      ) : (
+          // Customer DB Layout
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px]">
+            {/* Search Bar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex gap-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="Cari nama, nomor HP, atau sepeda..." 
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                    />
+                </div>
             </div>
 
-            <button type="submit" disabled={!newService || serviceBranches.length === 0} className="w-full bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed">
-              <Plus size={20} className="mx-auto" />
-            </button>
-          </form>
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-2">
+                {filteredCustomers.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400">
+                        <User size={48} className="mx-auto mb-4 opacity-20" />
+                        <p className="font-bold">Tidak ada pelanggan ditemukan</p>
+                    </div>
+                ) : (
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                            <tr>
+                                <th className="px-4 py-3 rounded-l-lg">Nama</th>
+                                <th className="px-4 py-3">Telepon</th>
+                                <th className="px-4 py-3">Unit Sepeda</th>
+                                <th className="px-4 py-3 rounded-r-lg text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredCustomers.map(c => (
+                                <tr key={c.id} className="hover:bg-blue-50/30 transition-colors group">
+                                    <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                            <User size={16} />
+                                        </div>
+                                        {c.name}
+                                    </td>
+                                    <td className="px-4 py-3 font-mono text-slate-500">
+                                        {c.phone || '-'}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-wrap gap-1">
+                                            {c.bikes.map((b, i) => (
+                                                <span key={i} className="text-[10px] bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-600 font-medium">
+                                                    {b}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => setEditingCustomer(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button onClick={() => { if(window.confirm('Hapus pelanggan ini?')) onRemoveCustomer(c.id); }} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
         </div>
+      )}
 
-      </div>
+      {/* Modals */}
+      <EditCustomerModal 
+        isOpen={!!editingCustomer} 
+        onClose={() => setEditingCustomer(null)} 
+        customer={editingCustomer} 
+        onSave={onUpdateCustomer} 
+      />
     </div>
   );
 };

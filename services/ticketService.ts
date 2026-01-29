@@ -1,82 +1,114 @@
-import { db } from './firebaseConfig';
-import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  orderBy,
-  runTransaction,
-  writeBatch,
-  getDocs
-} from 'firebase/firestore';
-import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch } from "../types";
+import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Customer, StorageSlot, StorageStatus, StorageLog } from "../types";
+import { INITIAL_DUMMY_DATA, DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 
-// --- Collection References ---
-const ticketsRef = collection(db, 'tickets');
-const mechanicsRef = collection(db, 'mechanics');
-const servicesRef = collection(db, 'services');
+// --- MOCK DATABASE IMPLEMENTATION ---
+// Since no valid Firebase credentials are provided in the environment,
+// we are using LocalStorage to simulate a database so the app is fully functional.
 
-// --- Subscriptions (Real-time Read) ---
+const DB_KEY = 'daily-bike-db';
+
+interface DB {
+    tickets: Ticket[];
+    mechanics: MechanicDefinition[];
+    services: ServiceDefinition[];
+    customers: Customer[];
+    storageSlots: StorageSlot[];
+    ticketCounter: number;
+}
+
+// --- Helpers ---
+
+const getDb = (): DB => {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) return JSON.parse(raw);
+    
+    // Initialize with default data if empty
+    const initialDb: DB = {
+        tickets: INITIAL_DUMMY_DATA,
+        mechanics: DEFAULT_MECHANICS,
+        services: DEFAULT_SERVICES,
+        customers: [],
+        storageSlots: [],
+        ticketCounter: 2 // Start after dummy data
+    };
+
+    // Initialize 30 Storage Slots
+    for (let i = 1; i <= 30; i++) {
+      const id = `A-${String(i).padStart(2, '0')}`;
+      initialDb.storageSlots.push({
+        id,
+        status: 'vacant',
+        lastActivity: new Date().toISOString(),
+        history: []
+      });
+    }
+
+    localStorage.setItem(DB_KEY, JSON.stringify(initialDb));
+    return initialDb;
+};
+
+const saveDb = (db: DB) => {
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    // Dispatch event to update components in real-time (in same tab)
+    window.dispatchEvent(new CustomEvent('db-update'));
+};
+
+// Simulate network delay for realism
+const delay = (ms: number = 300) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- Subscriptions ---
+
+const createSubscription = <T>(getData: (db: DB) => T, callback: (data: T) => void) => {
+    // Initial data
+    callback(getData(getDb()));
+
+    const handler = () => {
+        callback(getData(getDb()));
+    };
+
+    window.addEventListener('db-update', handler);
+    // Listen to storage events (cross-tab sync)
+    window.addEventListener('storage', (e) => {
+        if (e.key === DB_KEY) handler();
+    });
+
+    return () => {
+        window.removeEventListener('db-update', handler);
+        window.removeEventListener('storage', handler);
+    };
+};
 
 export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
-  // Order by arrival time descending
-  const q = query(ticketsRef, orderBy('timestamps.arrival', 'desc'));
-
-  return onSnapshot(q, (snapshot) => {
-    const tickets = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id, // Will now be "1", "2", etc.
-        branch: data.branch,
-        customerName: data.customerName,
-        unitSepeda: data.unitSepeda,
-        phone: data.phone,
-        serviceTypes: data.serviceTypes,
-        mechanic: data.mechanic,
-        status: data.status,
-        notes: data.notes,
-        cancellationReason: data.cancellationReason,
-        timestamps: data.timestamps
-      } as Ticket;
-    });
-    onUpdate(tickets);
-  }, (error) => {
-    console.error("Error subscribing to tickets:", error);
-  });
+    return createSubscription(
+        db => db.tickets.sort((a,b) => new Date(b.timestamps.arrival).getTime() - new Date(a.timestamps.arrival).getTime()), 
+        onUpdate
+    );
 };
 
 export const subscribeToMechanics = (onUpdate: (mechanics: MechanicDefinition[]) => void) => {
-  return onSnapshot(mechanicsRef, (snapshot) => {
-    const mechanics = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name,
-        branches: data.branches || ['mk', 'pik']
-      };
-    });
-    onUpdate(mechanics);
-  });
+    return createSubscription(db => db.mechanics, onUpdate);
 };
 
 export const subscribeToServices = (onUpdate: (services: ServiceDefinition[]) => void) => {
-  return onSnapshot(servicesRef, (snapshot) => {
-    const services = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name,
-        branches: data.branches || ['mk', 'pik']
-      };
-    });
-    onUpdate(services);
-  });
+    return createSubscription(db => db.services, onUpdate);
 };
 
-// --- Cloud Actions (Write) ---
+export const subscribeToCustomers = (onUpdate: (customers: Customer[]) => void) => {
+    return createSubscription(db => db.customers.sort((a,b) => a.name.localeCompare(b.name)), onUpdate);
+};
+
+export const subscribeToStorage = (onUpdate: (slots: StorageSlot[]) => void) => {
+    return createSubscription(
+        db => db.storageSlots.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' })), 
+        onUpdate
+    );
+};
+
+// --- Actions ---
+
+export const initializeStorageSlots = async () => {
+    // handled in getDb() automatically
+};
 
 export const addTicketToCloud = async (
   branch: Branch,
@@ -84,48 +116,53 @@ export const addTicketToCloud = async (
   phone: string,
   unitSepeda: string,
   serviceTypes: string[],
-  notes: string
+  notes: string,
+  customerId?: string
 ) => {
-  const counterRef = doc(db, 'settings', 'ticketCounter');
+    await delay();
+    const db = getDb();
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      const counterDoc = await transaction.get(counterRef);
-      
-      let nextId = 1;
-      if (counterDoc.exists()) {
-        nextId = counterDoc.data().count + 1;
-      }
+    // 1. Handle Customer
+    let finalCustomerId = customerId;
+    if (!finalCustomerId) {
+        // Create new
+        finalCustomerId = 'CUST-' + Date.now();
+        db.customers.push({
+            id: finalCustomerId,
+            name: customerName,
+            phone,
+            bikes: [unitSepeda]
+        });
+    } else {
+        // Update existing bike list
+        const cust = db.customers.find(c => c.id === finalCustomerId);
+        if (cust && !cust.bikes.includes(unitSepeda)) {
+            cust.bikes.push(unitSepeda);
+        }
+    }
 
-      // 1. Increment the counter
-      transaction.set(counterRef, { count: nextId });
-
-      // 2. Create the ticket with the custom ID (e.g., "101")
-      const ticketId = String(nextId);
-      const ticketRef = doc(db, 'tickets', ticketId);
-
-      const newTicket = {
+    // 2. Create Ticket
+    db.ticketCounter++;
+    const ticketId = db.ticketCounter.toString();
+    const newTicket: Ticket = {
+        id: ticketId,
         branch,
         customerName,
-        unitSepeda,
         phone,
+        unitSepeda,
         serviceTypes,
         mechanic: null,
         status: 'waiting',
         notes,
         timestamps: {
-          arrival: new Date().toISOString(),
-          called: null,
-          ready: null,
-          finished: null
+            arrival: new Date().toISOString(),
+            called: null,
+            ready: null,
+            finished: null
         }
-      };
-
-      transaction.set(ticketRef, newTicket);
-    });
-  } catch (e) {
-    console.error("Transaction failed: ", e);
-  }
+    };
+    db.tickets.push(newTicket);
+    saveDb(db);
 };
 
 export const updateTicketStatusInCloud = async (
@@ -136,81 +173,209 @@ export const updateTicketStatusInCloud = async (
   notes?: string, 
   reason?: string
 ) => {
-  const ticketDocRef = doc(db, 'tickets', id);
-  const ts = { ...currentTicket.timestamps };
-  
-  if (status === 'active' && currentTicket.status === 'waiting') ts.called = new Date().toISOString();
-  if (status === 'ready') ts.ready = new Date().toISOString();
-  if (status === 'done') ts.finished = new Date().toISOString();
+    const db = getDb();
+    const ticket = db.tickets.find(t => t.id === id);
+    
+    if (ticket) {
+        // Timestamp logic
+        if (status === 'active' && ticket.status === 'waiting') ticket.timestamps.called = new Date().toISOString();
+        if (status === 'ready') ticket.timestamps.ready = new Date().toISOString();
+        if (status === 'done') ticket.timestamps.finished = new Date().toISOString();
 
-  const updates: any = {
-    status,
-    timestamps: ts
-  };
+        ticket.status = status;
+        if (mechanic !== undefined) ticket.mechanic = mechanic;
+        
+        // --- NOTE APPENDING LOGIC (Constraint #3) ---
+        if (notes !== undefined) {
+             // If status is pending (Tunda), append instead of overwrite
+             if (status === 'pending' && ticket.notes) {
+                 const timestamp = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+                 ticket.notes = `${ticket.notes} | [${timestamp}] ${notes}`;
+             } else {
+                 ticket.notes = notes;
+             }
+        }
+        
+        if (reason !== undefined) ticket.cancellationReason = reason;
 
-  if (mechanic !== undefined) updates.mechanic = mechanic;
-  if (notes !== undefined) updates.notes = notes;
-  if (reason !== undefined) updates.cancellationReason = reason;
-
-  await updateDoc(ticketDocRef, updates);
+        saveDb(db);
+    }
 };
 
-export const updateTicketServicesInCloud = async (id: string, serviceTypes: string[]) => {
-  const ticketDocRef = doc(db, 'tickets', id);
-  await updateDoc(ticketDocRef, { serviceTypes });
+export const updateTicketServicesInCloud = async (id: string, serviceTypes: string[], notes?: string) => {
+    const db = getDb();
+    const ticket = db.tickets.find(t => t.id === id);
+    if (ticket) {
+        ticket.serviceTypes = serviceTypes;
+        if (notes !== undefined) ticket.notes = notes;
+        saveDb(db);
+    }
 };
 
-// --- Settings Management ---
+// --- Customer Actions ---
+
+export const updateCustomerInCloud = async (id: string, name: string, phone: string, bikes: string[]) => {
+    const db = getDb();
+    const c = db.customers.find(x => x.id === id);
+    if (c) {
+        c.name = name;
+        c.phone = phone;
+        c.bikes = bikes;
+        saveDb(db);
+    }
+};
+
+export const removeCustomerFromCloud = async (id: string) => {
+    const db = getDb();
+    db.customers = db.customers.filter(x => x.id !== id);
+    saveDb(db);
+};
+
+// --- Storage Actions ---
+
+export const updateStorageSlot = async (
+    slotId: string, 
+    updates: Partial<StorageSlot>, 
+    logAction?: 'ride_out' | 'ride_return' | 'checkout',
+    logPhoto?: string
+) => {
+    const db = getDb();
+    const slot = db.storageSlots.find(s => s.id === slotId);
+    if (slot) {
+        Object.assign(slot, updates);
+        slot.lastActivity = new Date().toISOString();
+        
+        // Add History Log
+        if (logAction) {
+            const log: StorageLog = {
+                id: Date.now().toString(),
+                action: logAction,
+                timestamp: new Date().toISOString(),
+                notes: updates.notes,
+                photo: logPhoto
+            };
+            if (!slot.history) slot.history = [];
+            slot.history.push(log);
+        }
+
+        saveDb(db);
+    }
+};
+
+export const checkInStorage = async (
+  slotId: string, 
+  customer: Customer | { name: string, phone: string, bikes: string[] },
+  bikeModel: string,
+  startDate: string,
+  endDate: string,
+  notes: string,
+  photo?: string
+) => {
+    const db = getDb();
+
+    // 1. Handle Customer
+    let customerId: string;
+    const inputId = 'id' in customer ? (customer as any).id : undefined;
+
+    if (inputId) {
+        customerId = inputId;
+        const existing = db.customers.find(c => c.id === customerId);
+        if (existing) {
+            if (!existing.bikes.includes(bikeModel)) {
+                existing.bikes.push(bikeModel);
+            }
+        }
+    } else {
+        // Create new
+        customerId = 'CUST-' + Date.now();
+        db.customers.push({
+            id: customerId,
+            name: customer.name,
+            phone: customer.phone,
+            bikes: [bikeModel]
+        });
+    }
+
+    // 2. Update Slot
+    const slot = db.storageSlots.find(s => s.id === slotId);
+    if (slot) {
+        const inDate = new Date(startDate);
+        const expiryDate = new Date(endDate);
+
+        slot.status = 'occupied';
+        slot.customerId = customerId;
+        slot.customerName = customer.name;
+        slot.customerPhone = customer.phone;
+        slot.bikeModel = bikeModel;
+        slot.inDate = inDate.toISOString();
+        slot.expiryDate = expiryDate.toISOString();
+        slot.notes = notes;
+        slot.lastActivity = inDate.toISOString();
+
+        // Initial History Log
+        const log: StorageLog = {
+            id: Date.now().toString(),
+            action: 'check_in',
+            timestamp: inDate.toISOString(),
+            notes: notes,
+            photo: photo
+        };
+        slot.history = [log]; // Reset history on new check-in
+    }
+    
+    saveDb(db);
+};
+
+// --- Settings ---
 
 export const addMechanicToCloud = async (name: string, branches: Branch[]) => {
-  await addDoc(mechanicsRef, { name, branches });
+    const db = getDb();
+    db.mechanics.push({ id: 'MECH-' + Date.now(), name, branches });
+    saveDb(db);
 };
 
 export const updateMechanicInCloud = async (id: string, name: string, branches: Branch[]) => {
-  const docRef = doc(db, 'mechanics', id);
-  await updateDoc(docRef, { name, branches });
+    const db = getDb();
+    const m = db.mechanics.find(x => x.id === id);
+    if (m) {
+        m.name = name;
+        m.branches = branches;
+        saveDb(db);
+    }
 };
 
 export const removeMechanicFromCloud = async (id: string) => {
-  await deleteDoc(doc(db, 'mechanics', id));
+    const db = getDb();
+    db.mechanics = db.mechanics.filter(x => x.id !== id);
+    saveDb(db);
 };
 
 export const addServiceToCloud = async (name: string, branches: Branch[]) => {
-  await addDoc(servicesRef, { name, branches });
+    const db = getDb();
+    db.services.push({ id: 'SVC-' + Date.now(), name, branches });
+    saveDb(db);
 };
 
 export const updateServiceInCloud = async (id: string, name: string, branches: Branch[]) => {
-  const docRef = doc(db, 'services', id);
-  await updateDoc(docRef, { name, branches });
+    const db = getDb();
+    const s = db.services.find(x => x.id === id);
+    if (s) {
+        s.name = name;
+        s.branches = branches;
+        saveDb(db);
+    }
 };
 
 export const removeServiceFromCloud = async (id: string) => {
-  await deleteDoc(doc(db, 'services', id));
+    const db = getDb();
+    db.services = db.services.filter(x => x.id !== id);
+    saveDb(db);
 };
 
 export const resetDatabase = async () => {
-  if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA tiket dan mereset nomor antrian kembali ke 1. Apakah Anda yakin?")) return;
-
-  try {
-    const batch = writeBatch(db);
-    
-    // 1. Get all tickets
-    const snapshot = await getDocs(collection(db, 'tickets'));
-    snapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-    });
-
-    // 2. Reset Counter
-    const counterRef = doc(db, 'settings', 'ticketCounter');
-    batch.set(counterRef, { count: 0 });
-
-    await batch.commit();
-    alert("Database berhasil direset. Nomor tiket berikutnya akan dimulai dari 1.");
+    if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA data lokal. Apakah Anda yakin?")) return;
+    localStorage.removeItem(DB_KEY);
     window.location.reload();
-  } catch (error) {
-    console.error("Error resetting DB:", error);
-    alert("Gagal mereset database. Cek console untuk detail.");
-  }
 };
 
 // --- Helpers ---

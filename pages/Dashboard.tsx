@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
-import { Ticket, KpiData, MechanicDefinition, ServiceDefinition } from '../types';
+import { Ticket, KpiData, MechanicDefinition, ServiceDefinition, Customer } from '../types';
 import TicketCard from '../components/TicketCard';
-import { AddCustomerModal, AssignMechanicModal, PendingModal, CancelModal, EditServicesModal } from '../components/Modals';
+import { CreateTicketModal, AssignMechanicModal, PendingModal, CancelModal, EditServicesModal } from '../components/Modals';
 import { Plus, Users, Clock, PlayCircle, CheckCircle, PackageCheck, Ban } from 'lucide-react';
 
 interface DashboardProps {
   tickets: Ticket[];
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
-  addTicket: (name: string, phone: string, unit: string, svcs: string[], notes: string) => void;
+  customers: Customer[]; // Added
+  addTicket: (name: string, phone: string, unit: string, svcs: string[], notes: string, customerId?: string) => void;
   updateTicketStatus: (id: string, status: any, mechanic?: string, notes?: string, reason?: string) => void;
   updateTicketServices: (id: string, serviceTypes: string[]) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ tickets, mechanics, services, addTicket, updateTicketStatus, updateTicketServices }) => {
+const Dashboard: React.FC<DashboardProps> = ({ tickets, mechanics, services, customers, addTicket, updateTicketStatus, updateTicketServices }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [assignModalData, setAssignModalData] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
   const [pendingModalData, setPendingModalData] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
@@ -94,7 +95,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tickets, mechanics, services, add
       </div>
 
       {/* Modals */}
-      <AddCustomerModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} services={services} onAdd={addTicket} />
+      <CreateTicketModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        services={services} 
+        customers={customers} 
+        onAdd={addTicket} 
+      />
       <AssignMechanicModal isOpen={assignModalData.isOpen} onClose={() => setAssignModalData({isOpen:false, ticket:null})} ticket={assignModalData.ticket} mechanics={mechanics} onAssign={(id:any, m:any) => updateTicketStatus(id, 'active', m)} />
       <PendingModal isOpen={pendingModalData.isOpen} onClose={() => setPendingModalData({isOpen:false, ticket:null})} ticket={pendingModalData.ticket} onConfirm={(id:any, r:any) => updateTicketStatus(id, 'pending', undefined, r)} />
       <CancelModal isOpen={cancelModalData.isOpen} onClose={() => setCancelModalData({isOpen:false, ticket:null})} ticket={cancelModalData.ticket} onConfirm={(id:any, r:any) => updateTicketStatus(id, 'cancelled', undefined, undefined, r)} />
