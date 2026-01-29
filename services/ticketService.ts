@@ -1,155 +1,131 @@
-import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Customer, StorageSlot, StorageStatus, StorageLog } from "../types";
-import { INITIAL_DUMMY_DATA, DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
+import { db } from './firebaseConfig';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  runTransaction, 
+  writeBatch, 
+  getDocs,
+  orderBy,
+  where
+} from 'firebase/firestore';
+import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Customer, StorageSlot, StorageLog } from "../types";
+import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 
-// --- MOCK DATABASE IMPLEMENTATION ---
-const DB_KEY = 'daily-bike-db';
+// --- HELPERS ---
 
-interface DB {
-    tickets: Ticket[];
-    mechanics: MechanicDefinition[];
-    services: ServiceDefinition[];
-    customers: Customer[];
-    storageSlots: StorageSlot[];
-    ticketCounter: number;
-}
-
-// --- Helpers ---
-
-const createInitialDb = (): DB => {
-    const initialDb: DB = {
-        tickets: INITIAL_DUMMY_DATA,
-        mechanics: DEFAULT_MECHANICS,
-        services: DEFAULT_SERVICES,
-        customers: [],
-        storageSlots: [],
-        ticketCounter: 2 // Start after dummy data
-    };
-
-    // Initialize 30 Storage Slots
-    for (let i = 1; i <= 30; i++) {
-      const id = `A-${String(i).padStart(2, '0')}`;
-      initialDb.storageSlots.push({
-        id,
-        status: 'vacant',
-        lastActivity: new Date().toISOString(),
-        history: []
-      });
-    }
-    return initialDb;
+// Map Firestore snapshot to typed array
+const mapSnapshot = <T>(snapshot: any) => {
+  return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as T[];
 };
 
-const getDb = (): DB => {
-    const raw = localStorage.getItem(DB_KEY);
-    let db: DB;
-
-    if (raw) {
-        try {
-            const parsed = JSON.parse(raw);
-            // MIGRATION / HYDRATION: Ensure new fields exist in old data
-            db = {
-                ...parsed,
-                customers: parsed.customers || [],
-                storageSlots: parsed.storageSlots || [],
-                mechanics: parsed.mechanics || DEFAULT_MECHANICS,
-                services: parsed.services || DEFAULT_SERVICES,
-                tickets: parsed.tickets || [],
-                ticketCounter: parsed.ticketCounter !== undefined ? parsed.ticketCounter : 0
-            };
-
-            // If storage slots are missing (migration from older version), init them
-            if (db.storageSlots.length === 0) {
-                 for (let i = 1; i <= 30; i++) {
-                    const id = `A-${String(i).padStart(2, '0')}`;
-                    db.storageSlots.push({
-                        id,
-                        status: 'vacant',
-                        lastActivity: new Date().toISOString(),
-                        history: []
-                    });
-                }
-            }
-        } catch (e) {
-            console.error("Database corrupted, resetting to defaults", e);
-            db = createInitialDb();
-        }
-    } else {
-        db = createInitialDb();
-    }
-    
-    // Always persist the hydrated/migrated DB back immediately
-    // This fixes the issue where new fields (like customers) wouldn't exist until the first write
-    if (JSON.stringify(db) !== raw) {
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
-    }
-    
-    return db;
+// Batch delete helper
+const deleteCollection = async (collectionName: string) => {
+  const q = query(collection(db, collectionName));
+  const snapshot = await getDocs(q);
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
 };
 
-const saveDb = (db: DB) => {
-    try {
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
-        window.dispatchEvent(new CustomEvent('db-update'));
-    } catch (e) {
-        console.error("Failed to save DB", e);
-        alert("Gagal menyimpan data! LocalStorage mungkin penuh.");
-    }
-};
-
-// Simulate network delay for realism
-const delay = (ms: number = 300) => new Promise(resolve => setTimeout(resolve, ms));
-
-// --- Subscriptions ---
-
-const createSubscription = <T>(getData: (db: DB) => T, callback: (data: T) => void) => {
-    // Initial data
-    callback(getData(getDb()));
-
-    const handler = () => {
-        callback(getData(getDb()));
-    };
-
-    window.addEventListener('db-update', handler);
-    // Listen to storage events (cross-tab sync)
-    window.addEventListener('storage', (e) => {
-        if (e.key === DB_KEY) handler();
-    });
-
-    return () => {
-        window.removeEventListener('db-update', handler);
-        window.removeEventListener('storage', handler);
-    };
-};
+// --- SUBSCRIPTIONS (REAL-TIME) ---
 
 export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
-    return createSubscription(
-        db => db.tickets.sort((a,b) => new Date(b.timestamps.arrival).getTime() - new Date(a.timestamps.arrival).getTime()), 
-        onUpdate
-    );
+    // Order by arrival time descending
+    const q = query(collection(db, 'tickets'));
+    return onSnapshot(q, (snapshot) => {
+        const tickets = mapSnapshot<Ticket>(snapshot);
+        // Client-side sort to ensure correct date handling
+        tickets.sort((a,b) => new Date(b.timestamps.arrival).getTime() - new Date(a.timestamps.arrival).getTime());
+        onUpdate(tickets);
+    }, (err) => console.error("Ticket Sync Error:", err));
 };
 
 export const subscribeToMechanics = (onUpdate: (mechanics: MechanicDefinition[]) => void) => {
-    return createSubscription(db => db.mechanics, onUpdate);
+    const q = query(collection(db, 'mechanics'));
+    return onSnapshot(q, (snapshot) => {
+        const data = mapSnapshot<MechanicDefinition>(snapshot);
+        if (data.length === 0) {
+            // Seed defaults if empty
+            const batch = writeBatch(db);
+            DEFAULT_MECHANICS.forEach(m => {
+                const ref = doc(db, 'mechanics', m.id);
+                batch.set(ref, m);
+            });
+            batch.commit();
+        } else {
+            onUpdate(data);
+        }
+    });
 };
 
 export const subscribeToServices = (onUpdate: (services: ServiceDefinition[]) => void) => {
-    return createSubscription(db => db.services, onUpdate);
+    const q = query(collection(db, 'services'));
+    return onSnapshot(q, (snapshot) => {
+        const data = mapSnapshot<ServiceDefinition>(snapshot);
+        if (data.length === 0) {
+            // Seed defaults if empty
+            const batch = writeBatch(db);
+            DEFAULT_SERVICES.forEach(s => {
+                const ref = doc(db, 'services', s.id);
+                batch.set(ref, s);
+            });
+            batch.commit();
+        } else {
+            onUpdate(data);
+        }
+    });
 };
 
 export const subscribeToCustomers = (onUpdate: (customers: Customer[]) => void) => {
-    return createSubscription(db => db.customers.sort((a,b) => a.name.localeCompare(b.name)), onUpdate);
+    const q = query(collection(db, 'customers'));
+    return onSnapshot(q, (snapshot) => {
+        const customers = mapSnapshot<Customer>(snapshot);
+        customers.sort((a,b) => a.name.localeCompare(b.name));
+        onUpdate(customers);
+    });
 };
 
 export const subscribeToStorage = (onUpdate: (slots: StorageSlot[]) => void) => {
-    return createSubscription(
-        db => db.storageSlots.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' })), 
-        onUpdate
-    );
+    const q = query(collection(db, 'storageSlots'));
+    return onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+            initializeStorageSlots();
+        } else {
+            const slots = mapSnapshot<StorageSlot>(snapshot);
+            // Sort naturally by ID (A-01, A-02...)
+            slots.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+            onUpdate(slots);
+        }
+    });
 };
 
-// --- Actions ---
+// --- ACTIONS ---
 
 export const initializeStorageSlots = async () => {
-    // handled in getDb() automatically now
+    // Check if exists first to avoid race conditions
+    const q = query(collection(db, 'storageSlots'));
+    const snap = await getDocs(q);
+    if (!snap.empty) return;
+
+    const batch = writeBatch(db);
+    for (let i = 1; i <= 30; i++) {
+        const id = `A-${String(i).padStart(2, '0')}`;
+        const ref = doc(db, 'storageSlots', id);
+        batch.set(ref, {
+            id,
+            status: 'vacant',
+            lastActivity: new Date().toISOString(),
+            history: []
+        });
+    }
+    await batch.commit();
 };
 
 export const addTicketToCloud = async (
@@ -161,50 +137,72 @@ export const addTicketToCloud = async (
   notes: string,
   customerId?: string
 ) => {
-    await delay();
-    const db = getDb();
+    try {
+        await runTransaction(db, async (transaction) => {
+            // 1. Handle Counter
+            const counterRef = doc(db, 'settings', 'ticketCounter');
+            const counterDoc = await transaction.get(counterRef);
+            
+            let nextId = 1;
+            if (counterDoc.exists()) {
+                nextId = (counterDoc.data().current || 0) + 1;
+            }
+            transaction.set(counterRef, { current: nextId }, { merge: true });
 
-    // 1. Handle Customer
-    let finalCustomerId = customerId;
-    if (!finalCustomerId) {
-        // Create new
-        finalCustomerId = 'CUST-' + Date.now();
-        db.customers.push({
-            id: finalCustomerId,
-            name: customerName,
-            phone,
-            bikes: [unitSepeda]
+            // 2. Handle Customer
+            let finalCustomerId = customerId;
+            if (!finalCustomerId) {
+                finalCustomerId = 'CUST-' + Date.now();
+                const newCustomerRef = doc(db, 'customers', finalCustomerId);
+                transaction.set(newCustomerRef, {
+                    id: finalCustomerId,
+                    name: customerName,
+                    phone: phone,
+                    bikes: [unitSepeda]
+                });
+            } else {
+                // We assume customer update (adding bike) is handled separately or purely via arrayUnion
+                // But inside transaction we must read before write.
+                // For simplicity, we skip complex array union logic inside this transaction 
+                // and handle customer update outside or just trust the ID.
+                // If we want to ensure bike is added:
+                const custRef = doc(db, 'customers', finalCustomerId);
+                const custSnap = await transaction.get(custRef);
+                if (custSnap.exists()) {
+                    const custData = custSnap.data();
+                    const bikes = custData.bikes || [];
+                    if (!bikes.includes(unitSepeda)) {
+                        transaction.update(custRef, { bikes: [...bikes, unitSepeda] });
+                    }
+                }
+            }
+
+            // 3. Create Ticket
+            const ticketId = nextId.toString();
+            const ticketRef = doc(db, 'tickets', ticketId);
+            const newTicket: Ticket = {
+                id: ticketId,
+                branch,
+                customerName,
+                phone,
+                unitSepeda,
+                serviceTypes,
+                mechanic: null,
+                status: 'waiting',
+                notes,
+                timestamps: {
+                    arrival: new Date().toISOString(),
+                    called: null,
+                    ready: null,
+                    finished: null
+                }
+            };
+            transaction.set(ticketRef, newTicket);
         });
-    } else {
-        // Update existing bike list
-        const cust = db.customers.find(c => c.id === finalCustomerId);
-        if (cust && !cust.bikes.includes(unitSepeda)) {
-            cust.bikes.push(unitSepeda);
-        }
+    } catch (e) {
+        console.error("Failed to add ticket", e);
+        alert("Gagal membuat tiket. Periksa koneksi internet.");
     }
-
-    // 2. Create Ticket
-    db.ticketCounter++;
-    const ticketId = db.ticketCounter.toString();
-    const newTicket: Ticket = {
-        id: ticketId,
-        branch,
-        customerName,
-        phone,
-        unitSepeda,
-        serviceTypes,
-        mechanic: null,
-        status: 'waiting',
-        notes,
-        timestamps: {
-            arrival: new Date().toISOString(),
-            called: null,
-            ready: null,
-            finished: null
-        }
-    };
-    db.tickets.push(newTicket);
-    saveDb(db);
 };
 
 export const updateTicketStatusInCloud = async (
@@ -215,64 +213,49 @@ export const updateTicketStatusInCloud = async (
   notes?: string, 
   reason?: string
 ) => {
-    const db = getDb();
-    const ticket = db.tickets.find(t => t.id === id);
-    
-    if (ticket) {
-        // Timestamp logic
-        if (status === 'active' && ticket.status === 'waiting') ticket.timestamps.called = new Date().toISOString();
-        if (status === 'ready') ticket.timestamps.ready = new Date().toISOString();
-        if (status === 'done') ticket.timestamps.finished = new Date().toISOString();
+    const ref = doc(db, 'tickets', id);
+    const updates: any = { status };
 
-        ticket.status = status;
-        if (mechanic !== undefined) ticket.mechanic = mechanic;
-        
-        // --- NOTE APPENDING LOGIC ---
-        if (notes !== undefined) {
-             if (status === 'pending' && ticket.notes) {
-                 const timestamp = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
-                 ticket.notes = `${ticket.notes} | [${timestamp}] ${notes}`;
-             } else {
-                 ticket.notes = notes;
-             }
+    // Timestamp logic
+    if (status === 'active' && currentTicket.status === 'waiting') updates['timestamps.called'] = new Date().toISOString();
+    if (status === 'ready') updates['timestamps.ready'] = new Date().toISOString();
+    if (status === 'done') updates['timestamps.finished'] = new Date().toISOString();
+
+    if (mechanic !== undefined) updates.mechanic = mechanic;
+    if (reason !== undefined) updates.cancellationReason = reason;
+
+    // Notes logic
+    if (notes !== undefined) {
+        if (status === 'pending' && currentTicket.notes) {
+            const timestamp = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+            updates.notes = `${currentTicket.notes} | [${timestamp}] ${notes}`;
+        } else {
+            updates.notes = notes;
         }
-        
-        if (reason !== undefined) ticket.cancellationReason = reason;
-
-        saveDb(db);
     }
+
+    await updateDoc(ref, updates);
 };
 
 export const updateTicketServicesInCloud = async (id: string, serviceTypes: string[], notes?: string) => {
-    const db = getDb();
-    const ticket = db.tickets.find(t => t.id === id);
-    if (ticket) {
-        ticket.serviceTypes = serviceTypes;
-        if (notes !== undefined) ticket.notes = notes;
-        saveDb(db);
-    }
+    const ref = doc(db, 'tickets', id);
+    const updates: any = { serviceTypes };
+    if (notes !== undefined) updates.notes = notes;
+    await updateDoc(ref, updates);
 };
 
-// --- Customer Actions ---
+// --- CUSTOMER ACTIONS ---
 
 export const updateCustomerInCloud = async (id: string, name: string, phone: string, bikes: string[]) => {
-    const db = getDb();
-    const c = db.customers.find(x => x.id === id);
-    if (c) {
-        c.name = name;
-        c.phone = phone;
-        c.bikes = bikes;
-        saveDb(db);
-    }
+    const ref = doc(db, 'customers', id);
+    await updateDoc(ref, { name, phone, bikes });
 };
 
 export const removeCustomerFromCloud = async (id: string) => {
-    const db = getDb();
-    db.customers = db.customers.filter(x => x.id !== id);
-    saveDb(db);
+    await deleteDoc(doc(db, 'customers', id));
 };
 
-// --- Storage Actions ---
+// --- STORAGE ACTIONS ---
 
 export const updateStorageSlot = async (
     slotId: string, 
@@ -280,13 +263,25 @@ export const updateStorageSlot = async (
     logAction?: 'ride_out' | 'ride_return' | 'checkout',
     logPhoto?: string
 ) => {
-    const db = getDb();
-    const slot = db.storageSlots.find(s => s.id === slotId);
-    if (slot) {
-        Object.assign(slot, updates);
-        slot.lastActivity = new Date().toISOString();
-        
-        // Add History Log
+    const ref = doc(db, 'storageSlots', slotId);
+    
+    // We can't easily arrayUnion a complex object with generated ID without reading first.
+    // So we assume we just fetch and update.
+    await runTransaction(db, async (transaction) => {
+        const slotDoc = await transaction.get(ref);
+        if (!slotDoc.exists()) return;
+
+        const data = slotDoc.data() as StorageSlot;
+        const history = data.history || [];
+
+        // Apply updates
+        const newUpdates = { 
+            ...updates, 
+            lastActivity: new Date().toISOString() 
+        };
+
+        // Add Log
+        let newHistory = history;
         if (logAction) {
             const log: StorageLog = {
                 id: Date.now().toString(),
@@ -295,12 +290,11 @@ export const updateStorageSlot = async (
                 notes: updates.notes,
                 photo: logPhoto
             };
-            if (!slot.history) slot.history = [];
-            slot.history.push(log);
+            newHistory = [...history, log];
         }
 
-        saveDb(db);
-    }
+        transaction.update(ref, { ...newUpdates, history: newHistory });
+    });
 };
 
 export const checkInStorage = async (
@@ -312,145 +306,133 @@ export const checkInStorage = async (
   notes: string,
   photo?: string
 ) => {
-    const db = getDb();
+    const inDate = new Date(startDate).toISOString();
+    const expiryDate = new Date(endDate).toISOString();
+    const timestamp = new Date().toISOString();
 
-    // 1. Handle Customer
-    let customerId: string;
-    const inputId = 'id' in customer ? (customer as any).id : undefined;
-
-    if (inputId) {
-        customerId = inputId;
-        const existing = db.customers.find(c => c.id === customerId);
-        if (existing) {
-            if (!existing.bikes.includes(bikeModel)) {
-                existing.bikes.push(bikeModel);
-            }
+    await runTransaction(db, async (transaction) => {
+        // 1. Handle Customer
+        let customerId: string;
+        if ('id' in customer) {
+             customerId = customer.id;
+             // Update customer bikes if needed
+             const custRef = doc(db, 'customers', customerId);
+             const custDoc = await transaction.get(custRef);
+             if (custDoc.exists()) {
+                 const existingBikes = custDoc.data().bikes || [];
+                 if (!existingBikes.includes(bikeModel)) {
+                     transaction.update(custRef, { bikes: [...existingBikes, bikeModel] });
+                 }
+             }
+        } else {
+             customerId = 'CUST-' + Date.now();
+             const newCustRef = doc(db, 'customers', customerId);
+             transaction.set(newCustRef, {
+                 id: customerId,
+                 name: customer.name,
+                 phone: customer.phone,
+                 bikes: [bikeModel]
+             });
         }
-    } else {
-        // Create new
-        customerId = 'CUST-' + Date.now();
-        db.customers.push({
-            id: customerId,
-            name: customer.name,
-            phone: customer.phone,
-            bikes: [bikeModel]
-        });
-    }
 
-    // 2. Update Slot
-    const slot = db.storageSlots.find(s => s.id === slotId);
-    if (slot) {
-        const inDate = new Date(startDate);
-        const expiryDate = new Date(endDate);
-
-        slot.status = 'occupied';
-        slot.customerId = customerId;
-        slot.customerName = customer.name;
-        slot.customerPhone = customer.phone;
-        slot.bikeModel = bikeModel;
-        slot.inDate = inDate.toISOString();
-        slot.expiryDate = expiryDate.toISOString();
-        slot.notes = notes;
-        slot.lastActivity = inDate.toISOString();
-
-        // Initial History Log
+        // 2. Update Slot
+        const slotRef = doc(db, 'storageSlots', slotId);
         const log: StorageLog = {
             id: Date.now().toString(),
             action: 'check_in',
-            timestamp: inDate.toISOString(),
+            timestamp: inDate,
             notes: notes,
             photo: photo
         };
-        slot.history = [log]; // Reset history on new check-in
-    }
-    
-    saveDb(db);
+
+        transaction.update(slotRef, {
+            status: 'occupied',
+            customerId,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            bikeModel,
+            inDate,
+            expiryDate,
+            notes,
+            lastActivity: inDate,
+            history: [log] // Reset history for new check in
+        });
+    });
 };
 
-// --- Settings ---
+// --- SETTINGS (MASTER DATA) ---
 
 export const addMechanicToCloud = async (name: string, branches: Branch[]) => {
-    const db = getDb();
-    db.mechanics.push({ id: 'MECH-' + Date.now(), name, branches });
-    saveDb(db);
+    const id = 'MECH-' + Date.now();
+    await setDoc(doc(db, 'mechanics', id), { id, name, branches });
 };
 
 export const updateMechanicInCloud = async (id: string, name: string, branches: Branch[]) => {
-    const db = getDb();
-    const m = db.mechanics.find(x => x.id === id);
-    if (m) {
-        m.name = name;
-        m.branches = branches;
-        saveDb(db);
-    }
+    await updateDoc(doc(db, 'mechanics', id), { name, branches });
 };
 
 export const removeMechanicFromCloud = async (id: string) => {
-    const db = getDb();
-    db.mechanics = db.mechanics.filter(x => x.id !== id);
-    saveDb(db);
+    await deleteDoc(doc(db, 'mechanics', id));
 };
 
 export const addServiceToCloud = async (name: string, branches: Branch[]) => {
-    const db = getDb();
-    db.services.push({ id: 'SVC-' + Date.now(), name, branches });
-    saveDb(db);
+    const id = 'SVC-' + Date.now();
+    await setDoc(doc(db, 'services', id), { id, name, branches });
 };
 
 export const updateServiceInCloud = async (id: string, name: string, branches: Branch[]) => {
-    const db = getDb();
-    const s = db.services.find(x => x.id === id);
-    if (s) {
-        s.name = name;
-        s.branches = branches;
-        saveDb(db);
-    }
+    await updateDoc(doc(db, 'services', id), { name, branches });
 };
 
 export const removeServiceFromCloud = async (id: string) => {
-    const db = getDb();
-    db.services = db.services.filter(x => x.id !== id);
-    saveDb(db);
+    await deleteDoc(doc(db, 'services', id));
 };
 
-export const resetDatabase = async () => {
-    // Deprecated
-    wipeDatabase();
-};
+export const resetDatabase = async () => wipeDatabase();
 
 export const wipeDatabase = async () => {
-    if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA Data (Tiket, Pelanggan, Storage). Data Master (Mekanik/Layanan) tetap ada. Sistem akan mulai dari 0 tanpa data dummy. Lanjutkan?")) return;
+    if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA Data (Tiket, Pelanggan, Storage) dari DATABASE ONLINE. Data Master tetap ada. Lanjutkan?")) return;
     
-    const db = getDb();
-    db.tickets = [];
-    db.customers = [];
-    db.storageSlots.forEach(slot => {
-        slot.status = 'vacant';
-        delete slot.customerId;
-        delete slot.customerName;
-        delete slot.customerPhone;
-        delete slot.bikeModel;
-        delete slot.inDate;
-        delete slot.expiryDate;
-        delete slot.notes;
-        slot.history = [];
-        slot.lastActivity = new Date().toISOString();
-    });
-    db.ticketCounter = 0; 
-    saveDb(db);
-    window.location.reload();
+    try {
+        await deleteCollection('tickets');
+        await deleteCollection('customers');
+        // Reset Storage Slots to Vacant (don't delete, just reset fields)
+        const q = query(collection(db, 'storageSlots'));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => {
+            batch.set(d.ref, {
+                id: d.id,
+                status: 'vacant',
+                lastActivity: new Date().toISOString(),
+                history: []
+            });
+        });
+        await batch.commit();
+
+        // Reset Counter
+        await setDoc(doc(db, 'settings', 'ticketCounter'), { current: 0 });
+
+        alert("Database berhasil di-reset.");
+        window.location.reload();
+    } catch (e) {
+        console.error("Wipe failed", e);
+        alert("Gagal mereset database. Pastikan Anda memiliki hak akses.");
+    }
 };
 
 export const resetTicketNumber = async () => {
-     if (!window.confirm("PERINGATAN: Ini akan mereset nomor antrian kembali ke 1. Pastikan tidak ada tiket aktif dengan nomor kecil agar tidak duplikat. Lanjutkan?")) return;
-     const db = getDb();
-     db.ticketCounter = 0;
-     saveDb(db);
-     window.dispatchEvent(new CustomEvent('db-update')); 
-     alert("Nomor tiket telah direset.");
+     if (!window.confirm("PERINGATAN: Ini akan mereset nomor antrian kembali ke 1. Pastikan tidak ada tiket aktif dengan nomor kecil. Lanjutkan?")) return;
+     try {
+         await setDoc(doc(db, 'settings', 'ticketCounter'), { current: 0 });
+         alert("Nomor tiket berhasil direset ke 0.");
+     } catch (e) {
+         console.error("Reset counter failed", e);
+         alert("Gagal mereset counter.");
+     }
 };
 
-// --- Helpers ---
+// --- HELPERS ---
 export const formatTime = (isoString: string | null): string => {
   if (!isoString) return '-';
   const date = new Date(isoString);
