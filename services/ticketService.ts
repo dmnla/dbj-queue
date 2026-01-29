@@ -12,7 +12,8 @@ import {
   writeBatch, 
   getDocs,
   orderBy,
-  where
+  where,
+  limit
 } from 'firebase/firestore';
 import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Customer, StorageSlot, StorageLog } from "../types";
 import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
@@ -138,14 +139,57 @@ export const addTicketToCloud = async (
   notes: string,
   customerId?: string
 ) => {
-    // Generate a unique ID based on timestamp to prevent collision/replacement
+    // 1. Prepare Identifiers
     const uniqueDocId = `T-${Date.now()}`;
     const timestamp = new Date().toISOString();
-    
-    // Default data structure
+
+    // 2. Prepare Customer Logic (Deduplication)
+    let finalCustomerId = customerId;
+    let newCustomerData: any = null;
+    let customerToUpdate: { id: string, bikes: string[] } | null = null;
+
+    if (!finalCustomerId) {
+        // Attempt to find existing customer by PHONE
+        try {
+            const q = query(collection(db, 'customers'), where('phone', '==', phone));
+            const querySnapshot = await getDocs(q);
+            
+            // Check for name match (case-insensitive)
+            const match = querySnapshot.docs.find(d => d.data().name.trim().toLowerCase() === customerName.trim().toLowerCase());
+
+            if (match) {
+                finalCustomerId = match.id;
+                const currentBikes = match.data().bikes || [];
+                if (!currentBikes.includes(unitSepeda)) {
+                    customerToUpdate = { id: match.id, bikes: [...currentBikes, unitSepeda] };
+                }
+            } else {
+                // Create New
+                finalCustomerId = 'CUST-' + Date.now();
+                newCustomerData = {
+                    id: finalCustomerId,
+                    name: customerName,
+                    phone: phone,
+                    bikes: [unitSepeda]
+                };
+            }
+        } catch (err) {
+            console.error("Error searching customer, defaulting to new", err);
+            finalCustomerId = 'CUST-' + Date.now();
+            newCustomerData = {
+                id: finalCustomerId,
+                name: customerName,
+                phone: phone,
+                bikes: [unitSepeda]
+            };
+        }
+    } else {
+        // ID Provided, check if we need to add bike (we'll do this optimistically in transaction)
+    }
+
+    // 3. Prepare Ticket Data
     const newTicketData = {
-        id: uniqueDocId, // This might be overwritten by mapSnapshot locally but useful for reference
-        ticketNumber: '000', // Placeholder
+        id: uniqueDocId,
         branch,
         customerName,
         phone,
@@ -164,7 +208,7 @@ export const addTicketToCloud = async (
 
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Handle Counter
+            // A. Handle Ticket Counter
             const counterRef = doc(db, 'settings', 'ticketCounter');
             const counterDoc = await transaction.get(counterRef);
             
@@ -174,30 +218,24 @@ export const addTicketToCloud = async (
             }
             transaction.set(counterRef, { current: nextNum }, { merge: true });
 
-            // 2. Handle Customer
-            let finalCustomerId = customerId;
-            if (!finalCustomerId) {
-                finalCustomerId = 'CUST-' + Date.now();
-                const newCustomerRef = doc(db, 'customers', finalCustomerId);
-                transaction.set(newCustomerRef, {
-                    id: finalCustomerId,
-                    name: customerName,
-                    phone: phone,
-                    bikes: [unitSepeda]
-                });
-            } else {
-                 const custRef = doc(db, 'customers', finalCustomerId);
-                 const custSnap = await transaction.get(custRef);
-                 if (custSnap.exists()) {
-                     const custData = custSnap.data();
-                     const bikes = custData.bikes || [];
-                     if (!bikes.includes(unitSepeda)) {
-                         transaction.update(custRef, { bikes: [...bikes, unitSepeda] });
-                     }
-                 }
+            // B. Handle Customer
+            if (newCustomerData) {
+                transaction.set(doc(db, 'customers', finalCustomerId!), newCustomerData);
+            } else if (customerToUpdate) {
+                transaction.update(doc(db, 'customers', customerToUpdate.id), { bikes: customerToUpdate.bikes });
+            } else if (customerId) {
+                // If explicit ID was passed, double check bike array
+                const cRef = doc(db, 'customers', customerId);
+                const cDoc = await transaction.get(cRef);
+                if (cDoc.exists()) {
+                    const bikes = cDoc.data().bikes || [];
+                    if (!bikes.includes(unitSepeda)) {
+                        transaction.update(cRef, { bikes: [...bikes, unitSepeda] });
+                    }
+                }
             }
 
-            // 3. Create Ticket with Unique ID
+            // C. Create Ticket
             const ticketRef = doc(db, 'tickets', uniqueDocId);
             transaction.set(ticketRef, {
                 ...newTicketData,
@@ -205,18 +243,42 @@ export const addTicketToCloud = async (
             });
         });
     } catch (e) {
-        console.error("Transaction failed", e);
-        // FALLBACK: If transaction fails (e.g. counter lock), write directly without counter.
-        // This ensures data is not lost and no "Gagal" error blocks the user.
+        console.error("Transaction failed, attempting fallback...", e);
+        
+        // FALLBACK: If transaction fails (locked resource, offline), use "Last Ticket + 1" heuristic
+        // This prevents the "random number" issue by guessing the next number reasonably well.
         try {
+            const q = query(collection(db, 'tickets'), orderBy('timestamps.arrival', 'desc'), limit(1));
+            const snap = await getDocs(q);
+            let nextNum = 1;
+            
+            if (!snap.empty) {
+                const lastData = snap.docs[0].data();
+                if (lastData.ticketNumber) {
+                    const parsed = parseInt(lastData.ticketNumber);
+                    if (!isNaN(parsed)) nextNum = parsed + 1;
+                }
+            }
+
+            // Force update counter if possible, ignoring concurrency
+            setDoc(doc(db, 'settings', 'ticketCounter'), { current: nextNum }, { merge: true }).catch(() => {});
+
+            // Save Customer
+            if (newCustomerData) {
+                 await setDoc(doc(db, 'customers', finalCustomerId!), newCustomerData);
+            } else if (customerToUpdate) {
+                 await updateDoc(doc(db, 'customers', customerToUpdate.id), { bikes: customerToUpdate.bikes });
+            }
+
+            // Save Ticket
             await setDoc(doc(db, 'tickets', uniqueDocId), {
                 ...newTicketData,
-                ticketNumber: uniqueDocId.slice(-4) // Use part of timestamp as fallback number
+                ticketNumber: nextNum.toString()
             });
-            console.log("Fallback save successful");
+
         } catch (innerError) {
              console.error("Fallback failed", innerError);
-             alert("Gagal menyimpan tiket. Pastikan konfigurasi Firebase API Key benar.");
+             alert("Gagal menyimpan tiket. Cek koneksi internet.");
         }
     }
 };
