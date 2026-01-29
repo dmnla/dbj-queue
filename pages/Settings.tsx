@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MechanicDefinition, ServiceDefinition, Branch, Customer } from '../types';
-import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle, Search, User } from 'lucide-react';
-import { resetDatabase } from '../services/ticketService';
+import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle, Search, User, RefreshCw } from 'lucide-react';
+import { wipeDatabase, resetTicketNumber } from '../services/ticketService';
 import { EditCustomerModal } from '../components/Modals';
 
 interface SettingsProps {
@@ -215,17 +215,36 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
 
       {/* Danger Zone */}
-      <div className="bg-red-50 p-6 rounded-lg border-2 border-red-100 flex items-center justify-between">
-        <div>
-            <h3 className="text-lg font-bold text-red-700 flex items-center gap-2"><AlertTriangle size={20} /> Danger Zone</h3>
-            <p className="text-sm text-red-600">Hapus semua data tiket dan reset nomor antrian kembali ke 1.</p>
+      <div className="bg-red-50 p-6 rounded-lg border-2 border-red-100 space-y-4">
+        <h3 className="text-lg font-bold text-red-700 flex items-center gap-2"><AlertTriangle size={20} /> Danger Zone</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex flex-col justify-between">
+                <div>
+                    <p className="text-sm font-bold text-slate-700 mb-1">Reset Database (Bersih Total)</p>
+                    <p className="text-xs text-slate-500 mb-3">Menghapus <strong>SEMUA</strong> data (Tiket, Pelanggan, Storage) dan mereset sistem dari 0 tanpa data dummy.</p>
+                </div>
+                <button 
+                    onClick={wipeDatabase}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                    <Trash2 size={16} /> Hapus Semua Data
+                </button>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex flex-col justify-between">
+                <div>
+                    <p className="text-sm font-bold text-slate-700 mb-1">Reset Nomor Tiket</p>
+                    <p className="text-xs text-slate-500 mb-3">Hanya mereset counter nomor antrian kembali ke 1. Data tiket yang ada <strong>TIDAK</strong> dihapus.</p>
+                </div>
+                <button 
+                    onClick={resetTicketNumber}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                    <RefreshCw size={16} /> Reset Counter
+                </button>
+            </div>
         </div>
-        <button 
-            onClick={resetDatabase}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors"
-        >
-            Reset Database
-        </button>
       </div>
 
       {activeTab === 'general' ? (

@@ -373,9 +373,41 @@ export const removeServiceFromCloud = async (id: string) => {
 };
 
 export const resetDatabase = async () => {
-    if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA data lokal. Apakah Anda yakin?")) return;
-    localStorage.removeItem(DB_KEY);
+    // Deprecated in favor of wipeDatabase, but kept for compatibility if needed.
+    // Now redirects to wipeDatabase logic for safety.
+    wipeDatabase();
+};
+
+export const wipeDatabase = async () => {
+    if (!window.confirm("PERINGATAN: Ini akan menghapus SEMUA Data (Tiket, Pelanggan, Storage). Data Master (Mekanik/Layanan) tetap ada. Sistem akan mulai dari 0 tanpa data dummy. Lanjutkan?")) return;
+    
+    const db = getDb();
+    db.tickets = [];
+    db.customers = [];
+    db.storageSlots.forEach(slot => {
+        slot.status = 'vacant';
+        slot.customerId = undefined;
+        slot.customerName = undefined;
+        slot.customerPhone = undefined;
+        slot.bikeModel = undefined;
+        slot.inDate = undefined;
+        slot.expiryDate = undefined;
+        slot.notes = undefined;
+        slot.history = [];
+        slot.lastActivity = new Date().toISOString();
+    });
+    db.ticketCounter = 0; // Reset counter too as per "revert back from 0"
+    saveDb(db);
     window.location.reload();
+};
+
+export const resetTicketNumber = async () => {
+     if (!window.confirm("PERINGATAN: Ini akan mereset nomor antrian kembali ke 1. Pastikan tidak ada tiket aktif dengan nomor kecil agar tidak duplikat. Lanjutkan?")) return;
+     const db = getDb();
+     db.ticketCounter = 0;
+     saveDb(db);
+     window.dispatchEvent(new CustomEvent('db-update')); 
+     alert("Nomor tiket telah direset.");
 };
 
 // --- Helpers ---
