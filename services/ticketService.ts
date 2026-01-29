@@ -2,9 +2,6 @@ import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Cu
 import { INITIAL_DUMMY_DATA, DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 
 // --- MOCK DATABASE IMPLEMENTATION ---
-// Since no valid Firebase credentials are provided in the environment,
-// we are using LocalStorage to simulate a database so the app is fully functional.
-
 const DB_KEY = 'daily-bike-db';
 
 interface DB {
@@ -18,11 +15,7 @@ interface DB {
 
 // --- Helpers ---
 
-const getDb = (): DB => {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
-    
-    // Initialize with default data if empty
+const createInitialDb = (): DB => {
     const initialDb: DB = {
         tickets: INITIAL_DUMMY_DATA,
         mechanics: DEFAULT_MECHANICS,
@@ -42,15 +35,64 @@ const getDb = (): DB => {
         history: []
       });
     }
-
-    localStorage.setItem(DB_KEY, JSON.stringify(initialDb));
     return initialDb;
 };
 
+const getDb = (): DB => {
+    const raw = localStorage.getItem(DB_KEY);
+    let db: DB;
+
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            // MIGRATION / HYDRATION: Ensure new fields exist in old data
+            db = {
+                ...parsed,
+                customers: parsed.customers || [],
+                storageSlots: parsed.storageSlots || [],
+                mechanics: parsed.mechanics || DEFAULT_MECHANICS,
+                services: parsed.services || DEFAULT_SERVICES,
+                tickets: parsed.tickets || [],
+                ticketCounter: parsed.ticketCounter !== undefined ? parsed.ticketCounter : 0
+            };
+
+            // If storage slots are missing (migration from older version), init them
+            if (db.storageSlots.length === 0) {
+                 for (let i = 1; i <= 30; i++) {
+                    const id = `A-${String(i).padStart(2, '0')}`;
+                    db.storageSlots.push({
+                        id,
+                        status: 'vacant',
+                        lastActivity: new Date().toISOString(),
+                        history: []
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Database corrupted, resetting to defaults", e);
+            db = createInitialDb();
+        }
+    } else {
+        db = createInitialDb();
+    }
+    
+    // Always persist the hydrated/migrated DB back immediately
+    // This fixes the issue where new fields (like customers) wouldn't exist until the first write
+    if (JSON.stringify(db) !== raw) {
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+    }
+    
+    return db;
+};
+
 const saveDb = (db: DB) => {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    // Dispatch event to update components in real-time (in same tab)
-    window.dispatchEvent(new CustomEvent('db-update'));
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        window.dispatchEvent(new CustomEvent('db-update'));
+    } catch (e) {
+        console.error("Failed to save DB", e);
+        alert("Gagal menyimpan data! LocalStorage mungkin penuh.");
+    }
 };
 
 // Simulate network delay for realism
@@ -107,7 +149,7 @@ export const subscribeToStorage = (onUpdate: (slots: StorageSlot[]) => void) => 
 // --- Actions ---
 
 export const initializeStorageSlots = async () => {
-    // handled in getDb() automatically
+    // handled in getDb() automatically now
 };
 
 export const addTicketToCloud = async (
@@ -185,9 +227,8 @@ export const updateTicketStatusInCloud = async (
         ticket.status = status;
         if (mechanic !== undefined) ticket.mechanic = mechanic;
         
-        // --- NOTE APPENDING LOGIC (Constraint #3) ---
+        // --- NOTE APPENDING LOGIC ---
         if (notes !== undefined) {
-             // If status is pending (Tunda), append instead of overwrite
              if (status === 'pending' && ticket.notes) {
                  const timestamp = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
                  ticket.notes = `${ticket.notes} | [${timestamp}] ${notes}`;
@@ -373,8 +414,7 @@ export const removeServiceFromCloud = async (id: string) => {
 };
 
 export const resetDatabase = async () => {
-    // Deprecated in favor of wipeDatabase, but kept for compatibility if needed.
-    // Now redirects to wipeDatabase logic for safety.
+    // Deprecated
     wipeDatabase();
 };
 
@@ -386,17 +426,17 @@ export const wipeDatabase = async () => {
     db.customers = [];
     db.storageSlots.forEach(slot => {
         slot.status = 'vacant';
-        slot.customerId = undefined;
-        slot.customerName = undefined;
-        slot.customerPhone = undefined;
-        slot.bikeModel = undefined;
-        slot.inDate = undefined;
-        slot.expiryDate = undefined;
-        slot.notes = undefined;
+        delete slot.customerId;
+        delete slot.customerName;
+        delete slot.customerPhone;
+        delete slot.bikeModel;
+        delete slot.inDate;
+        delete slot.expiryDate;
+        delete slot.notes;
         slot.history = [];
         slot.lastActivity = new Date().toISOString();
     });
-    db.ticketCounter = 0; // Reset counter too as per "revert back from 0"
+    db.ticketCounter = 0; 
     saveDb(db);
     window.location.reload();
 };
