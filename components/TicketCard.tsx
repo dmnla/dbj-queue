@@ -51,8 +51,9 @@ const TicketCard: React.FC<TicketCardProps> = ({
 
   const canEdit = ticket.status === 'waiting' || ticket.status === 'active' || ticket.status === 'pending';
   
-  // Check if ID is legacy (long) or new (short number)
-  const isLongId = ticket.id.length > 5;
+  // Use ticketNumber for display if available, otherwise fallback to ID
+  const displayId = ticket.ticketNumber ? `#${ticket.ticketNumber}` : `#${ticket.id.slice(-4)}`;
+  const isLongId = displayId.length > 6;
 
   return (
     <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full`}>
@@ -60,8 +61,8 @@ const TicketCard: React.FC<TicketCardProps> = ({
       {/* Header Row */}
       <div className="flex justify-between items-center gap-2 mb-1">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-            <span className={`font-mono font-black text-slate-400 tracking-tighter truncate ${isLongId ? 'text-xs' : 'text-xl sm:text-2xl'}`}>
-              #{ticket.id}
+            <span className={`font-mono font-black text-slate-400 tracking-tighter truncate ${isLongId ? 'text-lg' : 'text-2xl'}`}>
+              {displayId}
             </span>
             <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight whitespace-nowrap ${
             ticket.status === 'active' ? 'bg-blue-100 text-blue-800' :

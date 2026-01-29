@@ -1,3 +1,4 @@
+
 import { db } from './firebaseConfig';
 import { 
   collection, 
@@ -137,17 +138,41 @@ export const addTicketToCloud = async (
   notes: string,
   customerId?: string
 ) => {
+    // Generate a unique ID based on timestamp to prevent collision/replacement
+    const uniqueDocId = `T-${Date.now()}`;
+    const timestamp = new Date().toISOString();
+    
+    // Default data structure
+    const newTicketData = {
+        id: uniqueDocId, // This might be overwritten by mapSnapshot locally but useful for reference
+        ticketNumber: '000', // Placeholder
+        branch,
+        customerName,
+        phone,
+        unitSepeda,
+        serviceTypes,
+        mechanic: null,
+        status: 'waiting',
+        notes,
+        timestamps: {
+            arrival: timestamp,
+            called: null,
+            ready: null,
+            finished: null
+        }
+    };
+
     try {
         await runTransaction(db, async (transaction) => {
             // 1. Handle Counter
             const counterRef = doc(db, 'settings', 'ticketCounter');
             const counterDoc = await transaction.get(counterRef);
             
-            let nextId = 1;
+            let nextNum = 1;
             if (counterDoc.exists()) {
-                nextId = (counterDoc.data().current || 0) + 1;
+                nextNum = (counterDoc.data().current || 0) + 1;
             }
-            transaction.set(counterRef, { current: nextId }, { merge: true });
+            transaction.set(counterRef, { current: nextNum }, { merge: true });
 
             // 2. Handle Customer
             let finalCustomerId = customerId;
@@ -161,47 +186,38 @@ export const addTicketToCloud = async (
                     bikes: [unitSepeda]
                 });
             } else {
-                // We assume customer update (adding bike) is handled separately or purely via arrayUnion
-                // But inside transaction we must read before write.
-                // For simplicity, we skip complex array union logic inside this transaction 
-                // and handle customer update outside or just trust the ID.
-                // If we want to ensure bike is added:
-                const custRef = doc(db, 'customers', finalCustomerId);
-                const custSnap = await transaction.get(custRef);
-                if (custSnap.exists()) {
-                    const custData = custSnap.data();
-                    const bikes = custData.bikes || [];
-                    if (!bikes.includes(unitSepeda)) {
-                        transaction.update(custRef, { bikes: [...bikes, unitSepeda] });
-                    }
-                }
+                 const custRef = doc(db, 'customers', finalCustomerId);
+                 const custSnap = await transaction.get(custRef);
+                 if (custSnap.exists()) {
+                     const custData = custSnap.data();
+                     const bikes = custData.bikes || [];
+                     if (!bikes.includes(unitSepeda)) {
+                         transaction.update(custRef, { bikes: [...bikes, unitSepeda] });
+                     }
+                 }
             }
 
-            // 3. Create Ticket
-            const ticketId = nextId.toString();
-            const ticketRef = doc(db, 'tickets', ticketId);
-            const newTicket: Ticket = {
-                id: ticketId,
-                branch,
-                customerName,
-                phone,
-                unitSepeda,
-                serviceTypes,
-                mechanic: null,
-                status: 'waiting',
-                notes,
-                timestamps: {
-                    arrival: new Date().toISOString(),
-                    called: null,
-                    ready: null,
-                    finished: null
-                }
-            };
-            transaction.set(ticketRef, newTicket);
+            // 3. Create Ticket with Unique ID
+            const ticketRef = doc(db, 'tickets', uniqueDocId);
+            transaction.set(ticketRef, {
+                ...newTicketData,
+                ticketNumber: nextNum.toString()
+            });
         });
     } catch (e) {
-        console.error("Failed to add ticket", e);
-        alert("Gagal membuat tiket. Periksa koneksi internet.");
+        console.error("Transaction failed", e);
+        // FALLBACK: If transaction fails (e.g. counter lock), write directly without counter.
+        // This ensures data is not lost and no "Gagal" error blocks the user.
+        try {
+            await setDoc(doc(db, 'tickets', uniqueDocId), {
+                ...newTicketData,
+                ticketNumber: uniqueDocId.slice(-4) // Use part of timestamp as fallback number
+            });
+            console.log("Fallback save successful");
+        } catch (innerError) {
+             console.error("Fallback failed", innerError);
+             alert("Gagal menyimpan tiket. Pastikan konfigurasi Firebase API Key benar.");
+        }
     }
 };
 

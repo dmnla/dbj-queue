@@ -22,7 +22,8 @@ export interface Timestamps {
 }
 
 export interface Ticket {
-  id: string;
+  id: string; // Unique Document ID (e.g. UUID or Timestamp)
+  ticketNumber?: string; // Sequential Display ID (e.g. "1", "2")
   branch: Branch;
   customerName: string;
   unitSepeda: string;
