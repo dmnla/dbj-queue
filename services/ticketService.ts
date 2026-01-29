@@ -13,7 +13,8 @@ import {
   getDocs,
   orderBy,
   where,
-  limit
+  limit,
+  arrayUnion
 } from 'firebase/firestore';
 import { Ticket, MechanicDefinition, ServiceDefinition, TicketStatus, Branch, Customer, StorageSlot, StorageLog } from "../types";
 import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
@@ -268,6 +269,11 @@ export const addTicketToCloud = async (
                  await setDoc(doc(db, 'customers', finalCustomerId!), newCustomerData);
             } else if (customerToUpdate) {
                  await updateDoc(doc(db, 'customers', customerToUpdate.id), { bikes: customerToUpdate.bikes });
+            } else if (customerId) {
+                 // UPDATED: Ensure bike is added even in fallback mode if ID provided
+                 await updateDoc(doc(db, 'customers', customerId), {
+                     bikes: arrayUnion(unitSepeda)
+                 });
             }
 
             // Save Ticket

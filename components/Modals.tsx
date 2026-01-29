@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Search, ChevronDown, Check, UserCog, User, Phone, Bike, Calendar, Camera, History, Image as ImageIcon } from 'lucide-react';
 import { Ticket, Customer, StorageSlot, StorageLog } from '../types';
@@ -337,7 +338,14 @@ export const EditServicesModal = ({ isOpen, onClose, ticket, services, onUpdate 
 
 // 3. Assign Mechanic
 export const AssignMechanicModal = ({ isOpen, onClose, ticket, mechanics, onAssign }: any) => {
-    const [mechanic, setMechanic] = useState(mechanics[0]?.name || '');
+    const [mechanic, setMechanic] = useState('');
+
+    useEffect(() => {
+        if (isOpen && mechanics && mechanics.length > 0) {
+            setMechanic(mechanics[0].name);
+        }
+    }, [isOpen, mechanics]);
+
     return (
         <ModalBase title="Pilih Mekanik" isOpen={isOpen} onClose={onClose}>
             <div className="space-y-6">

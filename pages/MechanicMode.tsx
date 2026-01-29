@@ -93,7 +93,10 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                 <p className="text-slate-400 font-bold mt-2 text-sm">Tidak ada pengerjaan aktif saat ini.</p>
             </div>
         ) : (
-            ongoingTickets.map(ticket => (
+            ongoingTickets.map(ticket => {
+                const displayId = ticket.ticketNumber ? `#${ticket.ticketNumber}` : `#${ticket.id.slice(-4)}`;
+                
+                return (
                 <div key={ticket.id} className="bg-white rounded-2xl md:rounded-[2rem] shadow-xl border-2 border-slate-100 p-5 md:p-8 flex flex-col gap-4 md:gap-6 relative overflow-hidden transition-all hover:border-blue-200">
                     
                     {/* Corner Tag */}
@@ -108,7 +111,7 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                     {/* Customer Info Box */}
                     <div className="flex flex-col gap-1 pr-12 md:pr-0">
                         <div className="flex items-center gap-2 md:gap-3">
-                            <span className="font-mono text-2xl md:text-4xl font-black text-slate-300">#{ticket.id}</span>
+                            <span className="font-mono text-2xl md:text-4xl font-black text-slate-300">{displayId}</span>
                             <h3 className="text-xl md:text-3xl font-black text-slate-800 line-clamp-1 break-words">{ticket.customerName}</h3>
                         </div>
                         <p className="text-sm md:text-xl font-extrabold text-blue-600 italic uppercase tracking-tighter break-words">{ticket.unitSepeda}</p>
@@ -199,7 +202,7 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                         </div>
                     )}
                 </div>
-            ))
+            )})
         )}
       </div>
 
