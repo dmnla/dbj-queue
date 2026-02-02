@@ -399,10 +399,10 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                                                                     {log.photo && (
                                                                         <div className="mt-2">
                                                                             <img 
-                                                                                src={log.photo || ''} // FIX: Handle null/undefined src
+                                                                                src={log.photo} 
                                                                                 alt="Bukti" 
                                                                                 className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity" 
-                                                                                onClick={() => setPreviewImage(log.photo || null)} 
+                                                                                onClick={() => setPreviewImage(log.photo!)}
                                                                             />
                                                                         </div>
                                                                     )}
@@ -431,7 +431,7 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                 className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 cursor-pointer"
                 onClick={() => setPreviewImage(null)}
             >
-                <img src={previewImage || ''} alt="Full View" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                <img src={previewImage} alt="Full View" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
                 <button className="absolute top-4 right-4 text-white hover:text-slate-300">
                     <X size={32} />
                 </button>
