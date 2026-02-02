@@ -1,21 +1,22 @@
+
 import React, { useState } from 'react';
 import { MechanicDefinition, ServiceDefinition, Branch, Customer } from '../types';
-import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle, Search, User, RefreshCw } from 'lucide-react';
-import { wipeDatabase, resetTicketNumber } from '../services/ticketService';
+import { Trash2, Plus, MapPin, Edit2, Save, X, Check, AlertTriangle, Search, User, RefreshCw, Warehouse, Wrench } from 'lucide-react';
+import { wipeServiceData, wipeStorageData, resetTicketNumber } from '../services/ticketService';
 import { EditCustomerModal } from '../components/Modals';
 
 interface SettingsProps {
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
-  customers: Customer[]; // Added
+  customers: Customer[]; 
   onAddMechanic: (name: string, branches: Branch[]) => void;
   onUpdateMechanic: (id: string, name: string, branches: Branch[]) => void;
   onRemoveMechanic: (id: string) => void;
   onAddService: (name: string, branches: Branch[]) => void;
   onUpdateService: (id: string, name: string, branches: Branch[]) => void;
   onRemoveService: (id: string) => void;
-  onUpdateCustomer: (id: string, name: string, phone: string, bikes: string[]) => void; // Added
-  onRemoveCustomer: (id: string) => void; // Added
+  onUpdateCustomer: (id: string, name: string, phone: string, bikes: string[]) => void; 
+  onRemoveCustomer: (id: string) => void; 
 }
 
 interface EditableItemProps { 
@@ -181,6 +182,44 @@ const Settings: React.FC<SettingsProps> = ({
       setNewService('');
     }
   };
+
+  const verifyAction = (actionName: string): boolean => {
+      const pwd = prompt(`MASUKKAN PASSWORD UNTUK: ${actionName}`);
+      if (pwd === 'dailybikesystemreset') return true;
+      alert("Password salah.");
+      return false;
+  };
+
+  const handleWipeService = async () => {
+      // Must verify first
+      const isAuthorized = verifyAction("RESET SERVICE DATA");
+      if (!isAuthorized) return;
+
+      if (confirm("ANDA YAKIN MENGHAPUS SEMUA DATA SERVIS & CUSTOMER? Data tidak dapat dikembalikan.")) {
+          await wipeServiceData();
+          alert("Data servis berhasil direset.");
+      }
+  };
+
+  const handleWipeStorage = async () => {
+      // Must verify first
+      const isAuthorized = verifyAction("RESET STORAGE DATA");
+      if (!isAuthorized) return;
+
+      if (confirm("ANDA YAKIN MENGHAPUS SEMUA DATA STORAGE? Slot akan dikosongkan.")) {
+          await wipeStorageData();
+          alert("Data storage berhasil direset.");
+      }
+  };
+
+  const handleResetCounter = async () => {
+      // Must verify first
+      const isAuthorized = verifyAction("RESET COUNTER");
+      if (!isAuthorized) return;
+
+      await resetTicketNumber();
+      alert("Nomor tiket berhasil direset ke 0.");
+  };
   
   // Customer Filter Logic
   const filteredCustomers = customers.filter(c => {
@@ -217,18 +256,32 @@ const Settings: React.FC<SettingsProps> = ({
       {/* Danger Zone */}
       <div className="bg-red-50 p-6 rounded-lg border-2 border-red-100 space-y-4">
         <h3 className="text-lg font-bold text-red-700 flex items-center gap-2"><AlertTriangle size={20} /> Danger Zone</h3>
+        <p className="text-xs text-red-500 font-bold uppercase tracking-wide">Requires Password: dailybikesystemreset</p>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex flex-col justify-between">
                 <div>
-                    <p className="text-sm font-bold text-slate-700 mb-1">Reset Database (Bersih Total)</p>
-                    <p className="text-xs text-slate-500 mb-3">Menghapus <strong>SEMUA</strong> data (Tiket, Pelanggan, Storage) dan mereset sistem dari 0 tanpa data dummy.</p>
+                    <p className="text-sm font-bold text-slate-700 mb-1 flex items-center gap-2"><Wrench size={14} /> Reset Service Data</p>
+                    <p className="text-xs text-slate-500 mb-3">Menghapus semua tiket servis dan data pelanggan bengkel.</p>
                 </div>
                 <button 
-                    onClick={wipeDatabase}
+                    onClick={handleWipeService}
                     className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
                 >
-                    <Trash2 size={16} /> Hapus Semua Data
+                    <Trash2 size={16} /> Hapus Data Servis
+                </button>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex flex-col justify-between">
+                <div>
+                    <p className="text-sm font-bold text-slate-700 mb-1 flex items-center gap-2"><Warehouse size={14} /> Reset Storage Data</p>
+                    <p className="text-xs text-slate-500 mb-3">Mengosongkan semua slot storage dan menghapus riwayat log penyimpanan.</p>
+                </div>
+                <button 
+                    onClick={handleWipeStorage}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                    <Trash2 size={16} /> Hapus Data Storage
                 </button>
             </div>
 
@@ -238,7 +291,7 @@ const Settings: React.FC<SettingsProps> = ({
                     <p className="text-xs text-slate-500 mb-3">Hanya mereset counter nomor antrian kembali ke 1. Data tiket yang ada <strong>TIDAK</strong> dihapus.</p>
                 </div>
                 <button 
-                    onClick={resetTicketNumber}
+                    onClick={handleResetCounter}
                     className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
                 >
                     <RefreshCw size={16} /> Reset Counter

@@ -58,10 +58,15 @@ export type StorageStatus = 'vacant' | 'occupied' | 'on_ride';
 
 export interface StorageLog {
   id: string;
-  action: 'check_in' | 'ride_out' | 'ride_return' | 'checkout';
+  action: 'check_in' | 'ride_out' | 'ride_return' | 'checkout' | 'extend';
   timestamp: string;
   notes?: string;
-  photo?: string; // Base64 string for the image
+  photo?: string; // Single photo for return/ride logs
+  storageTicketId?: string; // Link log to a specific session
+  customerSnapshot?: {
+      name: string;
+      bike: string;
+  }; // Snapshot of customer data at time of log
 }
 
 export interface StorageSlot {
@@ -75,5 +80,19 @@ export interface StorageSlot {
   expiryDate?: string; // ISO
   notes?: string; // Defects or specific storage notes
   lastActivity?: string; // ISO
+  storageTicketId?: string; // Unique ID for the current active session (e.g. ST-123456)
+  // Changed from fixed object to array of strings for flexibility
+  photos?: string[]; 
   history: StorageLog[]; // Log of activities
+}
+
+export interface StorageRequest {
+  id: string;
+  name: string;
+  phone: string;
+  bikeModel: string;
+  durationMonths: number;
+  notes?: string;
+  timestamp: string;
+  status: 'pending' | 'approved' | 'rejected';
 }

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Ticket, KpiData, MechanicDefinition, ServiceDefinition, Customer } from '../types';
 import TicketCard from '../components/TicketCard';
 import { CreateTicketModal, AssignMechanicModal, PendingModal, CancelModal, EditServicesModal } from '../components/Modals';
@@ -8,7 +9,7 @@ interface DashboardProps {
   tickets: Ticket[];
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
-  customers: Customer[]; // Added
+  customers: Customer[];
   addTicket: (name: string, phone: string, unit: string, svcs: string[], notes: string, customerId?: string) => void;
   updateTicketStatus: (id: string, status: any, mechanic?: string, notes?: string, reason?: string) => void;
   updateTicketServices: (id: string, serviceTypes: string[]) => void;
@@ -21,18 +22,39 @@ const Dashboard: React.FC<DashboardProps> = ({ tickets, mechanics, services, cus
   const [cancelModalData, setCancelModalData] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
   const [editModalData, setEditModalData] = useState<{ isOpen: boolean; ticket: Ticket | null }>({ isOpen: false, ticket: null });
 
-  const todayStr = new Date().toDateString();
-  const todayTickets = tickets.filter(t => new Date(t.timestamps.arrival).toDateString() === todayStr);
-  
-  const kpi: KpiData = {
-    total: todayTickets.length,
-    waiting: todayTickets.filter(t => t.status === 'waiting').length,
-    inProgress: todayTickets.filter(t => t.status === 'active' || t.status === 'pending').length,
-    ready: todayTickets.filter(t => t.status === 'ready').length,
-    finished: todayTickets.filter(t => t.status === 'done').length,
-    cancelled: todayTickets.filter(t => t.status === 'cancelled').length
-  };
+  // --- KPI LOGIC CORRECTION ---
+  const kpi = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    
+    // 1. LIVE STATUS (Current Active Inventory)
+    // These do NOT reset daily. They show what is physically in the shop RIGHT NOW.
+    const waiting = tickets.filter(t => t.status === 'waiting').length;
+    const inProgress = tickets.filter(t => t.status === 'active' || t.status === 'pending').length;
+    const ready = tickets.filter(t => t.status === 'ready').length;
 
+    // 2. DAILY PERFORMANCE (Reset Daily)
+    // Only counts items that were finalized TODAY.
+    const finishedToday = tickets.filter(t => 
+      t.status === 'done' && 
+      t.timestamps.finished && 
+      new Date(t.timestamps.finished).toDateString() === todayStr
+    ).length;
+
+    const cancelledToday = tickets.filter(t => 
+      t.status === 'cancelled' && 
+      // Fallback to arrival time if finished time isn't set for cancellations
+      ((t.timestamps.finished && new Date(t.timestamps.finished).toDateString() === todayStr) || 
+       (!t.timestamps.finished && new Date(t.timestamps.arrival).toDateString() === todayStr))
+    ).length;
+
+    // Total handled today = Current Active + Done Today + Cancelled Today
+    // This gives a sense of "Total Daily Volume"
+    const total = waiting + inProgress + ready + finishedToday + cancelledToday;
+
+    return { total, waiting, inProgress, ready, finished: finishedToday, cancelled: cancelledToday };
+  }, [tickets]);
+
+  // Filter lists for columns (Show ALL tickets in these states, regardless of date)
   const waitingTickets = tickets.filter(t => t.status === 'waiting');
   const activeTickets = tickets.filter(t => t.status === 'active' || t.status === 'pending');
   const readyTickets = tickets.filter(t => t.status === 'ready');
@@ -54,12 +76,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tickets, mechanics, services, cus
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-        <KpiCard title="Total" value={kpi.total} icon={<Users size={16} className="text-purple-500" />} />
-        <KpiCard title="Antri" value={kpi.waiting} icon={<Clock size={16} className="text-gray-500" />} />
-        <KpiCard title="Kerja" value={kpi.inProgress} icon={<PlayCircle size={16} className="text-blue-500" />} />
-        <KpiCard title="Siap" value={kpi.ready} icon={<PackageCheck size={16} className="text-emerald-500" />} />
-        <KpiCard title="Selesai" value={kpi.finished} icon={<CheckCircle size={16} className="text-green-500" />} />
-        <KpiCard title="Batal" value={kpi.cancelled} icon={<Ban size={16} className="text-red-500" />} />
+        <KpiCard title="Total Vol." value={kpi.total} icon={<Users size={16} className="text-purple-500" />} />
+        <KpiCard title="Antri (Live)" value={kpi.waiting} icon={<Clock size={16} className="text-gray-500" />} />
+        <KpiCard title="Kerja (Live)" value={kpi.inProgress} icon={<PlayCircle size={16} className="text-blue-500" />} />
+        <KpiCard title="Siap (Live)" value={kpi.ready} icon={<PackageCheck size={16} className="text-emerald-500" />} />
+        <KpiCard title="Selesai (Hari Ini)" value={kpi.finished} icon={<CheckCircle size={16} className="text-green-500" />} />
+        <KpiCard title="Batal (Hari Ini)" value={kpi.cancelled} icon={<Ban size={16} className="text-red-500" />} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
