@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react';
 
 const sanitizeHtmlPlugin = (): PluginOption => ({
   name: 'sanitize-html',
-  enforce: 'pre' as const, // Fix: Cast to specific string literal type
-  transformIndexHtml(html: string) { // Fix: Add explicit type for html
+  enforce: 'pre' as const, 
+  transformIndexHtml(html: string) {
     // 1. Remove the broken ImportMap block completely
     let cleanHtml = html.replace(/<script type="importmap">[\s\S]*?<\/script>/gi, '');
     
