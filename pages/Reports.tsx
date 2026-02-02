@@ -402,7 +402,7 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                                                                                 src={log.photo} 
                                                                                 alt="Bukti" 
                                                                                 className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity" 
-                                                                                onClick={() => setPreviewImage(log.photo!)}
+                                                                                onClick={() => setPreviewImage(log.photo || null)} // FIX: undefined handling
                                                                             />
                                                                         </div>
                                                                     )}
