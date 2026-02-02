@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const sanitizeHtmlPlugin = () => ({
+const sanitizeHtmlPlugin = (): Plugin => ({
   name: 'sanitize-html',
-  enforce: 'pre', // <--- RUN THIS FIRST (Critical)
-  transformIndexHtml(html) {
+  enforce: 'pre',
+  transformIndexHtml(html: string) {
     // 1. Remove the broken ImportMap block completely
     let cleanHtml = html.replace(/<script type="importmap">[\s\S]*?<\/script>/gi, '');
     
