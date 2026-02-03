@@ -26,9 +26,12 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
   
-  // --- SERVICE LOGIC ---
+// --- SERVICE LOGIC ---
   const mechanicsList = useMemo(() => {
-    const mechs = new Set(tickets.map(t => t.mechanic).filter(Boolean));
+    // ✅ FIX: Explicitly tell TypeScript "I promise these are strings"
+    const mechs = new Set(
+        tickets.map(t => t.mechanic).filter((m): m is string => !!m)
+    );
     return ['Semua Mekanik', ...Array.from(mechs)];
   }, [tickets]);
 
@@ -204,10 +207,10 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
         const d = String(today.getDate()).padStart(2, '0');
         const m = String(today.getMonth() + 1).padStart(2, '0');
         const y = today.getFullYear();
-        const dateStr = `${d}/${m}/${y}`;
+        const dateStr = `_${d}/${m}/${y}_`; // Italic date
         
-        // CRITICAL: USE RAW 'tickets' PROP TO IGNORE SCREEN FILTERS
-        // Sort for better reading: Number/Time
+        // --- LOGIC: USE ALL TICKETS, IGNORE FILTERS ---
+        // Sort Priority: Ticket Number if exists, otherwise Arrival time
         const allTickets = [...tickets].sort((a,b) => {
              const numA = parseInt(a.ticketNumber || '0');
              const numB = parseInt(b.ticketNumber || '0');
@@ -215,12 +218,19 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
              return new Date(a.timestamps.arrival).getTime() - new Date(b.timestamps.arrival).getTime();
         });
 
+        // 1. Active (Sedang Dikerjakan)
         const active = allTickets.filter(t => t.status === 'active');
+        
+        // 2. Pending (Tertunda)
         const pending = allTickets.filter(t => t.status === 'pending');
+        
+        // 3. Ready (Siap Diambil)
         const ready = allTickets.filter(t => t.status === 'ready');
+        
+        // 4. Waiting (Antrian Menunggu)
         const waiting = allTickets.filter(t => t.status === 'waiting');
         
-        // Filter finished items strictly by TODAY's date
+        // 5. Finished Today (Selesai Hari Ini)
         const finishedToday = allTickets.filter(t => {
              if (t.status !== 'done' || !t.timestamps.finished) return false;
              const fDate = new Date(t.timestamps.finished);
@@ -229,18 +239,18 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                     fDate.getFullYear() === today.getFullYear();
         });
 
-        let text = `*LAPORAN BENGKEL DAILY BIKE*\n_${dateStr}_\n\n`;
+        let text = `*LAPORAN BENGKEL DAILY BIKE*\n${dateStr}\n\n`;
 
         const appendSection = (title: string, list: Ticket[]) => {
             if (list.length > 0) {
                 text += `*${title}:*\n`;
                 list.forEach(t => {
                     const services = t.serviceTypes.join(', ');
-                    // Format: - [ID/NUM] NAME - UNIT - (SERVICES)
                     const idDisplay = t.ticketNumber ? `[#${t.ticketNumber}]` : `[${t.id}]`;
+                    // Format: - [ID] NAME - UNIT - (SERVICES)
                     text += `- ${idDisplay} ${t.customerName.toUpperCase()} - ${t.unitSepeda.toUpperCase()} - (${services})\n`;
                 });
-                text += `\n`;
+                text += `\n`; // Spacer
             }
         };
 
@@ -432,7 +442,7 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                                                                     {log.photo && (
                                                                         <div className="mt-2">
                                                                             <img 
-                                                                                src={log.photo || ''} 
+                                                                                src={log.photo || ''} // FIX: Ensure not null
                                                                                 alt="Bukti" 
                                                                                 className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity" 
                                                                                 onClick={() => setPreviewImage(log.photo || null)} 
