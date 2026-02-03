@@ -26,12 +26,9 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
   
-// --- SERVICE LOGIC ---
+  // --- SERVICE LOGIC ---
   const mechanicsList = useMemo(() => {
-    // We filter out nulls AND tell TypeScript "We promise the result is a string"
-    const mechs = new Set(
-        tickets.map(t => t.mechanic).filter((m): m is string => !!m)
-    );
+    const mechs = new Set(tickets.map(t => t.mechanic).filter(Boolean));
     return ['Semua Mekanik', ...Array.from(mechs)];
   }, [tickets]);
 
@@ -201,45 +198,47 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
     }
   };
 
-const copyWA = () => {
+  const copyWA = () => {
       if (activeTab === 'service') {
         const today = new Date();
-        const dateStr = today.toLocaleDateString('id-ID', { 
-            day: '2-digit', 
-            month: '2-digit', 
-            year: 'numeric' 
-        }); // Result: 03/02/2026
+        const d = String(today.getDate()).padStart(2, '0');
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const y = today.getFullYear();
+        const dateStr = `${d}/${m}/${y}`;
         
-        // --- 1. Filter Lists ---
-        // For Active/Pending/Ready/Waiting -> Show ALL tickets currently in the shop (Day by Day)
-        // We do NOT filter these by date, because they are still physically in the workshop.
-        const active = tickets.filter(t => t.status === 'active');
-        const pending = tickets.filter(t => t.status === 'pending');
-        const ready = tickets.filter(t => t.status === 'ready');
-        const waiting = tickets.filter(t => t.status === 'waiting');
-        
-        // For Finished -> Show ONLY tickets finished TODAY
-        const finishedToday = tickets.filter(t => {
-             if (t.status !== 'done' || !t.timestamps.finished) return false;
-             const fDate = new Date(t.timestamps.finished);
-             return fDate.toDateString() === today.toDateString();
+        // CRITICAL: USE RAW 'tickets' PROP TO IGNORE SCREEN FILTERS
+        // Sort for better reading: Number/Time
+        const allTickets = [...tickets].sort((a,b) => {
+             const numA = parseInt(a.ticketNumber || '0');
+             const numB = parseInt(b.ticketNumber || '0');
+             if (numA && numB) return numA - numB;
+             return new Date(a.timestamps.arrival).getTime() - new Date(b.timestamps.arrival).getTime();
         });
 
-        // --- 2. Build Text Output ---
+        const active = allTickets.filter(t => t.status === 'active');
+        const pending = allTickets.filter(t => t.status === 'pending');
+        const ready = allTickets.filter(t => t.status === 'ready');
+        const waiting = allTickets.filter(t => t.status === 'waiting');
+        
+        // Filter finished items strictly by TODAY's date
+        const finishedToday = allTickets.filter(t => {
+             if (t.status !== 'done' || !t.timestamps.finished) return false;
+             const fDate = new Date(t.timestamps.finished);
+             return fDate.getDate() === today.getDate() && 
+                    fDate.getMonth() === today.getMonth() && 
+                    fDate.getFullYear() === today.getFullYear();
+        });
+
         let text = `*LAPORAN BENGKEL DAILY BIKE*\n_${dateStr}_\n\n`;
 
         const appendSection = (title: string, list: Ticket[]) => {
             if (list.length > 0) {
                 text += `*${title}:*\n`;
                 list.forEach(t => {
-                    // Force Uppercase
-                    const name = t.customerName.toUpperCase();
-                    const unit = t.unitSepeda.toUpperCase();
-                    const services = t.serviceTypes.join(', ').toUpperCase();
-                    
-                    // FORMAT: [ID] NAME - UNIT - (SERVICES)
-                    // We use t.id to match your requested format [T-17...]
-                    text += `[${t.id}] ${name} - ${unit} - (${services})\n`;
+                    const services = t.serviceTypes.join(', ');
+                    // Format: - [ID/NUM] NAME - UNIT - (SERVICES)
+                    const idDisplay = t.ticketNumber ? `[#${t.ticketNumber}]` : `[${t.id}]`;
+                    text += `- ${idDisplay} ${t.customerName.toUpperCase()} - ${t.unitSepeda.toUpperCase()} - (${services})\n`;
                 });
                 text += `\n`;
             }
@@ -253,7 +252,7 @@ const copyWA = () => {
         
         navigator.clipboard.writeText(text).then(() => alert("Laporan WhatsApp berhasil disalin!"));
       } else {
-          // Storage Copy Logic
+          // Storage Copy
           const text = filteredStorageSessions.map(s => `${s.currentSlot}: ${s.customerName} (${s.bikeModel}) - ${s.status}`).join('\n');
           navigator.clipboard.writeText(text).then(() => alert("Data Storage disalin!"));
       }
