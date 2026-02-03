@@ -203,35 +203,45 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
 
   const copyWA = () => {
       if (activeTab === 'service') {
-        const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        const today = new Date();
+        const dateStr = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
         
-        let text = `*DAILY BIKE - LAPORAN HARIAN*\n📅 ${todayStr}\n`;
+        // Use ALL tickets for a complete status snapshot, not just filtered ones
+        const active = tickets.filter(t => t.status === 'active');
+        const pending = tickets.filter(t => t.status === 'pending');
+        const ready = tickets.filter(t => t.status === 'ready');
+        const waiting = tickets.filter(t => t.status === 'waiting');
         
-        // Use the actual filtered tickets for the report
-        const waiting = filteredTickets.filter(t => t.status === 'waiting').length;
-        const process = filteredTickets.filter(t => ['active', 'pending'].includes(t.status)).length;
-        const ready = filteredTickets.filter(t => t.status === 'ready').length;
-        const done = filteredTickets.filter(t => t.status === 'done').length;
+        // Filter finished items strictly by TODAY's date
+        const finishedToday = tickets.filter(t => {
+             if (t.status !== 'done' || !t.timestamps.finished) return false;
+             const fDate = new Date(t.timestamps.finished);
+             return fDate.toDateString() === today.toDateString();
+        });
 
-        text += `\n*RINGKASAN (FILTERED):*\n⏳ Menunggu: ${waiting}\n🔧 Proses: ${process}\n✅ Siap: ${ready}\n🏁 Selesai: ${done}\n\n`;
+        let text = `*LAPORAN BENGKEL DAILY BIKE*\n_${dateStr}_\n\n`;
 
-        if (filteredTickets.length > 0) {
-            text += `*DETAIL TIKET:*\n`;
-            filteredTickets.forEach((t, i) => { 
-                let statusIcon = '⏳';
-                if(t.status === 'active') statusIcon = '🔧';
-                if(t.status === 'pending') statusIcon = '⚠️';
-                if(t.status === 'ready') statusIcon = '✅';
-                if(t.status === 'done') statusIcon = '🏁';
-                if(t.status === 'cancelled') statusIcon = '❌';
+        const appendSection = (title: string, list: Ticket[]) => {
+            if (list.length > 0) {
+                text += `*${title}:*\n`;
+                list.forEach(t => {
+                    const services = t.serviceTypes.join(', ');
+                    // Format: - [ID] NAME - UNIT - (SERVICES)
+                    text += `- [${t.ticketNumber ? '#' + t.ticketNumber : t.id}] ${t.customerName.toUpperCase()} - ${t.unitSepeda.toUpperCase()} - (${services})\n`;
+                });
+                text += `\n`;
+            }
+        };
 
-                text += `${i+1}. ${statusIcon} [${t.ticketNumber || t.id.slice(-4)}] ${t.customerName} - ${t.unitSepeda}\n`; 
-            });
-        }
+        appendSection('SEDANG DIKERJAKAN', active);
+        appendSection('TERTUNDA (PENDING)', pending);
+        appendSection('SIAP DIAMBIL', ready);
+        appendSection('ANTRIAN MENUNGGU', waiting);
+        appendSection('SELESAI HARI INI', finishedToday);
         
-        navigator.clipboard.writeText(text).then(() => alert("Laporan berhasil disalin!"));
+        navigator.clipboard.writeText(text).then(() => alert("Laporan WhatsApp berhasil disalin!"));
       } else {
-          // Simplified Storage Report
+          // Storage Copy
           const text = filteredStorageSessions.map(s => `${s.currentSlot}: ${s.customerName} (${s.bikeModel}) - ${s.status}`).join('\n');
           navigator.clipboard.writeText(text).then(() => alert("Data Storage disalin!"));
       }
