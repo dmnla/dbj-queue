@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Ticket, TicketStatus, StorageSlot, StorageLog, Branch } from '../types';
 import { formatTime } from '../services/ticketService';
@@ -25,9 +26,12 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
   
-  // --- SERVICE LOGIC ---
+// --- SERVICE LOGIC ---
   const mechanicsList = useMemo(() => {
-    const mechs = new Set(tickets.map(t => t.mechanic).filter(Boolean));
+    // We filter out nulls AND tell TypeScript "We promise the result is a string"
+    const mechs = new Set(
+        tickets.map(t => t.mechanic).filter((m): m is string => !!m)
+    );
     return ['Semua Mekanik', ...Array.from(mechs)];
   }, [tickets]);
 
@@ -95,8 +99,6 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
       
       allLogs.forEach(log => {
           // If a log doesn't have a storageTicketId (legacy), we might need a fallback.
-          // For now, let's assume current system ensures IDs. 
-          // Fallback: Use timestamp + slot check_in as key (simplified)
           const key = log.storageTicketId || `LEGACY_${log.slotId}_${log.timestamp}`; 
           
           if (!groups[key]) groups[key] = [];
@@ -107,18 +109,12 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
       const sessions: StorageSession[] = Object.entries(groups).map(([ticketId, logs]) => {
           const checkInLog = logs.find(l => l.action === 'check_in') || logs[0];
           
-          // Determine "Completed" status:
-          // A session is completed if the LAST log is 'checkout' and it's NOT a move (implied by next log existing in same group? No, moves are separate checkouts in different slots sharing same ID).
-          // Actually, 'moveStorageSlot' keeps the same ticketId. 
-          // So if the very last log chronologically for this ID is 'checkout', it's truly checked out.
           const lastLog = logs[logs.length - 1];
           const isCompleted = lastLog.action === 'checkout'; 
           
-          // Data snapshot from logs (preferred) or active slot if active
           let customerName = checkInLog.customerSnapshot?.name || 'Unknown';
           let bikeModel = checkInLog.customerSnapshot?.bike || 'Unknown';
           
-          // If active, try to find current slot data
           let currentSlotId = lastLog.slotId;
           if (!isCompleted) {
               const activeSlot = storageSlots.find(s => s.storageTicketId === ticketId);
@@ -128,7 +124,6 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                   currentSlotId = activeSlot.id;
               }
           } else {
-              // Use snapshot from last log if available
               if (lastLog.customerSnapshot) {
                   customerName = lastLog.customerSnapshot.name;
                   bikeModel = lastLog.customerSnapshot.bike;
@@ -155,7 +150,6 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
           };
       });
 
-      // Sort: Most recent Check In first
       return sessions.sort((a, b) => new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime());
   }, [storageSlots, currentBranch]);
 
@@ -379,7 +373,7 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                                         {expandedSessionId === s.id && (
                                             <tr className="bg-slate-50/50 shadow-inner">
                                                 <td colSpan={9} className="px-6 py-6">
-                                                    {/* TIMELINE STYLE LOGS - 1:1 Match with Modal */}
+                                                    {/* TIMELINE STYLE LOGS */}
                                                      <div className="relative border-l-2 border-slate-200 ml-3 space-y-6 pb-2 pl-4">
                                                         {[...s.logs].reverse().map((log: StorageLog & { slotId: string }) => (
                                                             <div key={log.id} className="relative">
@@ -398,7 +392,7 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
                                                                     {log.photo && (
                                                                         <div className="mt-2">
                                                                             <img 
-                                                                                src={log.photo || ''} // FIX: Handle null/undefined src
+                                                                                src={log.photo || ''} 
                                                                                 alt="Bukti" 
                                                                                 className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity" 
                                                                                 onClick={() => setPreviewImage(log.photo || null)} 
