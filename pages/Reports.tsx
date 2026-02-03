@@ -204,17 +204,36 @@ const Reports: React.FC<ReportsProps> = ({ tickets, storageSlots = [], currentBr
   const copyWA = () => {
       if (activeTab === 'service') {
         const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-        const today = new Date().toDateString();
-        const finishedToday = tickets.filter(t => t.status === 'done' && t.timestamps.finished && new Date(t.timestamps.finished).toDateString() === today);
-        const remainingCount = tickets.filter(t => ['waiting', 'active', 'pending', 'ready'].includes(t.status)).length;
-        let text = `*DAILY BIKE - LAPORAN HARIAN*\n📅 ${todayStr}\n\n*RINGKASAN:*\n✅ Selesai: ${finishedToday.length} Unit\n🔧 Sisa/Proses: ${remainingCount} Unit\n\n`;
-        if (finishedToday.length > 0) {
-            text += `*DAFTAR SELESAI:*\n`;
-            finishedToday.forEach((t, i) => { text += `${i+1}. ${t.customerName} - ${t.unitSepeda}\n`; });
+        
+        let text = `*DAILY BIKE - LAPORAN HARIAN*\n📅 ${todayStr}\n`;
+        
+        // Use the actual filtered tickets for the report
+        const waiting = filteredTickets.filter(t => t.status === 'waiting').length;
+        const process = filteredTickets.filter(t => ['active', 'pending'].includes(t.status)).length;
+        const ready = filteredTickets.filter(t => t.status === 'ready').length;
+        const done = filteredTickets.filter(t => t.status === 'done').length;
+
+        text += `\n*RINGKASAN (FILTERED):*\n⏳ Menunggu: ${waiting}\n🔧 Proses: ${process}\n✅ Siap: ${ready}\n🏁 Selesai: ${done}\n\n`;
+
+        if (filteredTickets.length > 0) {
+            text += `*DETAIL TIKET:*\n`;
+            filteredTickets.forEach((t, i) => { 
+                let statusIcon = '⏳';
+                if(t.status === 'active') statusIcon = '🔧';
+                if(t.status === 'pending') statusIcon = '⚠️';
+                if(t.status === 'ready') statusIcon = '✅';
+                if(t.status === 'done') statusIcon = '🏁';
+                if(t.status === 'cancelled') statusIcon = '❌';
+
+                text += `${i+1}. ${statusIcon} [${t.ticketNumber || t.id.slice(-4)}] ${t.customerName} - ${t.unitSepeda}\n`; 
+            });
         }
-        navigator.clipboard.writeText(text).then(() => alert("Copied to Clipboard"));
+        
+        navigator.clipboard.writeText(text).then(() => alert("Laporan berhasil disalin!"));
       } else {
-          alert("Copy WA hanya untuk laporan bengkel.");
+          // Simplified Storage Report
+          const text = filteredStorageSessions.map(s => `${s.currentSlot}: ${s.customerName} (${s.bikeModel}) - ${s.status}`).join('\n');
+          navigator.clipboard.writeText(text).then(() => alert("Data Storage disalin!"));
       }
   };
 
