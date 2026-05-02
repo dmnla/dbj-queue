@@ -172,6 +172,7 @@ const StorageMode: React.FC<StorageModeProps> = ({ slots, customers }) => {
     } catch (error) {
       console.error("CheckIn Error:", error);
       alert(`Gagal Check-In: ${error}`);
+      throw error;
     }
   };
 
@@ -183,7 +184,7 @@ const StorageMode: React.FC<StorageModeProps> = ({ slots, customers }) => {
     // Ensure we have a valid slotId before calling service
     if (!slotId) {
       alert("Error: No slot selected");
-      return;
+      throw new Error("No slot selected");
     }
     try {
       await approveStorageRequest(reqId, slotId, data);
@@ -191,6 +192,7 @@ const StorageMode: React.FC<StorageModeProps> = ({ slots, customers }) => {
     } catch (err) {
       console.error("Failed to approve request:", err);
       alert(`Gagal memproses request: ${err}`);
+      throw err;
     }
   };
 
@@ -209,6 +211,7 @@ const StorageMode: React.FC<StorageModeProps> = ({ slots, customers }) => {
     } catch (error) {
       console.error("Ride Out Error", error);
       alert("Gagal update status.");
+      throw error;
     }
   };
 
@@ -234,19 +237,23 @@ const StorageMode: React.FC<StorageModeProps> = ({ slots, customers }) => {
     } catch (error) {
       console.error("Checkout Error", error);
       alert("Gagal checkout.");
+      throw error;
     }
   };
 
-  const handleReturn = (slotId: string, photo?: File, notes?: string) => {
-    // Pass notes in updates object so it gets picked up by updateStorageSlot for the log
-    // However, we don't want to replace the main slot notes usually?
-    // updateStorageSlot uses updates.notes for the log note.
-    updateStorageSlot(
-      slotId,
-      { status: "occupied", notes: notes },
-      "ride_return",
-      photo,
-    );
+  const handleReturn = async (slotId: string, photo?: File, notes?: string) => {
+    try {
+      await updateStorageSlot(
+        slotId,
+        { status: "occupied", notes: notes },
+        "ride_return",
+        photo,
+      );
+    } catch (error) {
+      console.error("Return Error", error);
+      alert(`Gagal Return: ${error}`);
+      throw error;
+    }
   };
 
   const handleAdjustContract = (slotId: string, start: string, end: string) =>

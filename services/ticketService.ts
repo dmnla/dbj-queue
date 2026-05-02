@@ -40,6 +40,9 @@ const uploadFilesToStorage = async (
   files: File[],
 ): Promise<string[]> => {
   if (!storage) throw new Error("Firebase Storage is not initialized");
+  if (!storage.app.options.storageBucket) {
+    throw new Error("Missing storageBucket in Firebase Config (VITE_FIREBASE_STORAGE_BUCKET). Tolong pastikan environment variable ini terisi di Vercel.");
+  }
   const urls: string[] = [];
   for (const file of files) {
     // Path matches: storage_photos/{slotId}/{timestamp}_{filename}
