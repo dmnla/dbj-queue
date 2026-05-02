@@ -1,6 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Cast import.meta to any to avoid TypeScript errors when Vite types aren't loaded
 const env = (import.meta as any).env;
@@ -15,11 +16,13 @@ const firebaseConfig = {
 };
 
 let db: any = null;
+let storage: any = null;
 
 if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    storage = getStorage(app);
     console.log("🔥 Firebase initialized successfully.");
   } catch (error) {
     console.error("Firebase Initialization Error:", error);
@@ -30,4 +33,4 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     alert("Database Configuration Missing.");
 }
 
-export { db };
+export { db, storage };
