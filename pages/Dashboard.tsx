@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { debugFastForwardTaken } from "../services/ticketService";
 import {
   Ticket,
   KpiData,
@@ -13,6 +14,7 @@ import {
   PendingModal,
   CancelModal,
   EditServicesModal,
+  KendalaModal,
 } from "../components/Modals";
 import {
   Plus,
@@ -22,6 +24,8 @@ import {
   CheckCircle,
   PackageCheck,
   Ban,
+  MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -43,6 +47,7 @@ interface DashboardProps {
     mechanic?: string,
     notes?: string,
     reason?: string,
+    followUpResult?: 'Berhasil' | 'Kendala'
   ) => void;
   updateTicketServices: (
     id: string,
@@ -74,6 +79,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     ticket: Ticket | null;
   }>({ isOpen: false, ticket: null });
   const [editModalData, setEditModalData] = useState<{
+    isOpen: boolean;
+    ticket: Ticket | null;
+  }>({ isOpen: false, ticket: null });
+  const [kendalaModalData, setKendalaModalData] = useState<{
     isOpen: boolean;
     ticket: Ticket | null;
   }>({ isOpen: false, ticket: null });
@@ -130,6 +139,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
   const readyTickets = tickets.filter((t) => t.status === "ready");
 
+  const now = new Date().getTime();
+  const followUpTickets = tickets.filter((t) => {
+    if (t.status !== "taken" || !t.timestamps.taken) return false;
+    const takenTime = new Date(t.timestamps.taken).getTime();
+    const daysSinceTaken = (now - takenTime) / (1000 * 3600 * 24);
+    return daysSinceTaken >= 3;
+  });
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8 pb-20">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -183,7 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Waiting */}
         <Column
           title="Menunggu"
@@ -249,9 +266,57 @@ const Dashboard: React.FC<DashboardProps> = ({
               key={t.id}
               ticket={t}
               actionLabel="Unit Diambil"
-              onAction={() => updateTicketStatus(t.id, "done")}
+              onAction={() => updateTicketStatus(t.id, "taken")}
             />
           ))}
+        </Column>
+
+        {/* Follow Up */}
+        <Column
+          title="Follow Up"
+          color="bg-purple-500"
+          count={followUpTickets.length}
+          bg="bg-purple-50/50"
+        >
+          {followUpTickets.map((t) => {
+            const cleanPhone = t.phone.startsWith("0")
+              ? "62" + t.phone.slice(1)
+              : t.phone;
+            return (
+              <TicketCard
+                key={t.id}
+                ticket={t}
+                customActions={
+                  <div className="flex flex-col gap-2 mt-2">
+                    <button
+                      onClick={() =>
+                        window.open(`https://wa.me/${cleanPhone}`, "_blank")
+                      }
+                      className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-black text-xs py-2 rounded-lg shadow-sm transition-colors uppercase tracking-widest"
+                    >
+                      <MessageSquare size={14} /> Follow Up WA
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateTicketStatus(t.id, "done", undefined, undefined, undefined, 'Berhasil')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-black text-xs py-2 rounded-lg shadow-sm transition-colors uppercase tracking-widest"
+                      >
+                        <CheckCircle size={14} /> Selesai
+                      </button>
+                      <button
+                        onClick={() =>
+                          setKendalaModalData({ isOpen: true, ticket: t })
+                        }
+                        className="flex-1 flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-black text-xs py-2 rounded-lg border border-red-200 transition-colors uppercase tracking-widest"
+                      >
+                        <AlertTriangle size={14} /> Kendala
+                      </button>
+                    </div>
+                  </div>
+                }
+              />
+            );
+          })}
         </Column>
       </div>
 
@@ -292,6 +357,23 @@ const Dashboard: React.FC<DashboardProps> = ({
         ticket={editModalData.ticket}
         services={services}
         onUpdate={updateTicketServices}
+      />
+      <KendalaModal
+        isOpen={kendalaModalData.isOpen}
+        onClose={() => setKendalaModalData({ isOpen: false, ticket: null })}
+        ticket={kendalaModalData.ticket}
+        services={services}
+        onConfirm={(ticket: any, notes: string, warrantyServices: string[]) => {
+          updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, 'Kendala');
+          addTicket(
+            ticket.customerName,
+            ticket.phone,
+            ticket.unitSepeda,
+            warrantyServices,
+            notes,
+            undefined
+          );
+        }}
       />
     </div>
   );

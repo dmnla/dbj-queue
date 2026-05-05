@@ -1,5 +1,5 @@
 
-export type TicketStatus = 'waiting' | 'active' | 'pending' | 'ready' | 'done' | 'cancelled';
+export type TicketStatus = 'waiting' | 'active' | 'pending' | 'ready' | 'taken' | 'done' | 'cancelled';
 export type Branch = 'mk' | 'pik'; // mk = Muara Karang, pik = PIK 2
 
 export interface ServiceDefinition {
@@ -18,6 +18,7 @@ export interface Timestamps {
   arrival: string; // ISO string
   called: string | null; // ISO string
   ready: string | null; // ISO string
+  taken: string | null; // ISO string
   finished: string | null; // ISO string
 }
 
@@ -34,6 +35,7 @@ export interface Ticket {
   notes: string;
   cancellationReason?: string;
   timestamps: Timestamps;
+  followUpResult?: 'Berhasil' | 'Kendala';
 }
 
 export interface KpiData {

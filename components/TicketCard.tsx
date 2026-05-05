@@ -14,6 +14,7 @@ interface TicketCardProps {
   onChangeMechanic?: (ticket: Ticket) => void;
   onEditServices?: (ticket: Ticket) => void;
   compact?: boolean;
+  customActions?: React.ReactNode;
 }
 
 const TicketCard: React.FC<TicketCardProps> = ({ 
@@ -25,7 +26,8 @@ const TicketCard: React.FC<TicketCardProps> = ({
   onCancel,
   onChangeMechanic,
   onEditServices,
-  compact = false
+  compact = false,
+  customActions
 }) => {
   const getStatusColor = () => {
     switch (ticket.status) {
@@ -33,6 +35,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
       case 'active': return 'border-l-4 border-blue-500';
       case 'pending': return 'border-l-4 border-orange-500';
       case 'ready': return 'border-l-4 border-emerald-500';
+      case 'taken': return 'border-l-4 border-purple-500';
       case 'done': return 'border-l-4 border-green-700';
       default: return '';
     }
@@ -44,6 +47,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
       case 'active': return 'Dikerjakan';
       case 'pending': return 'Tertunda';
       case 'ready': return 'Siap Diambil';
+      case 'taken': return 'Follow Up';
       case 'done': return 'Selesai';
       default: return status;
     }
@@ -68,6 +72,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
             ticket.status === 'active' ? 'bg-blue-100 text-blue-800' :
             ticket.status === 'pending' ? 'bg-orange-100 text-orange-800' :
             ticket.status === 'ready' ? 'bg-emerald-100 text-emerald-800' :
+            ticket.status === 'taken' ? 'bg-purple-100 text-purple-800' :
             ticket.status === 'done' ? 'bg-green-100 text-green-800' :
             'bg-gray-100 text-gray-800'
             }`}>
@@ -105,6 +110,9 @@ const TicketCard: React.FC<TicketCardProps> = ({
         <h3 className="font-black text-base text-slate-800 flex items-start gap-2 leading-tight">
           <User size={16} className="text-slate-300 flex-shrink-0 mt-0.5" />
           <span className="line-clamp-1 break-all">{ticket.customerName}</span>
+          {ticket.notes && ticket.notes.includes('[GARANSI]') && (
+            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-black tracking-widest uppercase shrink-0">GARANSI</span>
+          )}
         </h3>
         <p className="text-sm font-bold text-blue-600 flex items-center gap-2 mt-1 uppercase italic">
           <Bike size={14} className="text-orange-500 flex-shrink-0" />
@@ -175,8 +183,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
 
       {/* Bottom Actions */}
       <div className="pt-1 mt-auto">
-        <div className="flex gap-2">
-          {onSecondaryAction && secondaryActionLabel && (
+        {customActions ? (
+          <div className="flex flex-col gap-2">
+            {customActions}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            {onSecondaryAction && secondaryActionLabel && (
              <button
              type="button"
              onClick={(e) => { e.stopPropagation(); onSecondaryAction(ticket); }}
@@ -201,6 +214,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

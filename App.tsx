@@ -189,6 +189,7 @@ function App() {
     mechanic?: string,
     notes?: string,
     reason?: string,
+    followUpResult?: 'Berhasil' | 'Kendala'
   ) => {
     const ticketToUpdate = tickets.find((t) => t.id === id);
     if (!ticketToUpdate) return;
@@ -199,6 +200,7 @@ function App() {
       mechanic,
       notes,
       reason,
+      followUpResult
     );
   };
 

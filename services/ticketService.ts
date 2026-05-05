@@ -370,6 +370,7 @@ export const addTicketToCloud = async (
           arrival: timestamp,
           called: null,
           ready: null,
+          taken: null,
           finished: null,
         },
       });
@@ -387,6 +388,7 @@ export const updateTicketStatusInCloud = async (
   mechanic?: string,
   notes?: string,
   reason?: string,
+  followUpResult?: 'Berhasil' | 'Kendala'
 ) => {
   if (!db) return;
   const updates: any = { status };
@@ -394,10 +396,13 @@ export const updateTicketStatusInCloud = async (
     updates["timestamps.called"] = new Date().toISOString();
   if (status === "ready")
     updates["timestamps.ready"] = new Date().toISOString();
+  if (status === "taken")
+    updates["timestamps.taken"] = new Date().toISOString();
   if (status === "done")
     updates["timestamps.finished"] = new Date().toISOString();
   if (mechanic !== undefined) updates.mechanic = mechanic;
   if (reason !== undefined) updates.cancellationReason = reason;
+  if (followUpResult !== undefined) updates.followUpResult = followUpResult;
 
   let finalNotes = notes;
   if (notes !== undefined && status === "pending" && currentTicket.notes) {
@@ -421,6 +426,16 @@ export const updateTicketServicesInCloud = async (
   const updates: any = { serviceTypes };
   if (notes !== undefined) updates.notes = notes;
   await updateDoc(doc(db, "tickets", id), updates);
+};
+
+export const debugFastForwardTaken = async (id: string) => {
+  if (!db) return;
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  await updateDoc(doc(db, "tickets", id), {
+    status: "taken",
+    "timestamps.taken": threeDaysAgo.toISOString(),
+  });
 };
 
 export const updateCustomerInCloud = async (

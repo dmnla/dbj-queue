@@ -1616,3 +1616,84 @@ export const ConfirmationModal = ({
     </ModalBase>
   );
 };
+
+export const KendalaModal = ({ isOpen, onClose, ticket, services, onConfirm }: any) => {
+  const [kendala, setKendala] = useState("");
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const serviceNames = useMemo(
+    () => services.map((s: any) => s.name),
+    [services],
+  );
+
+  // Reset state when opening
+  useEffect(() => {
+    if (isOpen) {
+      setKendala("");
+      setSelectedServices([]);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kendala.trim() || selectedServices.length === 0) {
+      alert("Harap isi catatan kendala dan pilih setidaknya 1 layanan.");
+      return;
+    }
+    // format the note
+    const garansiNotes = `[GARANSI] - Kendala: ${kendala}`;
+    onConfirm(ticket, garansiNotes, selectedServices);
+    onClose();
+  };
+
+  return (
+    <ModalBase isOpen={isOpen} title={`Kendala: ${ticket?.customerName}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="bg-yellow-50 text-yellow-700 text-sm p-3 rounded border border-yellow-200">
+          <strong>Perhatian:</strong> Membuat tiket dari form ini akan membuat antrian baru bertanda <span className="font-bold uppercase tracking-wide bg-red-500 text-white px-1 rounded text-xs ml-1 mr-1">Garansi</span> di daftar "Menunggu". Tiket yang lama akan ditandai selesai.
+        </div>
+        
+        <div>
+          <label className="block text-sm font-black text-slate-700 uppercase tracking-widest mb-2">
+            Pilih Layanan Garansi <span className="text-red-500">*</span>
+          </label>
+          <MultiSearchableSelect
+            options={serviceNames}
+            selectedValues={selectedServices}
+            onChange={setSelectedServices}
+            placeholder="Pilih satu atau lebih layanan..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-black text-slate-700 uppercase tracking-widest mb-2">
+            Catatan Kendala <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            required
+            value={kendala}
+            onChange={(e) => setKendala(e.target.value)}
+            className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 focus:bg-white text-sm min-h-[100px]"
+            placeholder="Contoh: Rem masih blong, ban kempes..."
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-3.5 rounded-xl font-black uppercase tracking-widest transition-colors shadow-sm"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            className="bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-black uppercase tracking-widest shadow-lg transition-transform active:scale-95"
+          >
+            Buat Tiket Antrian
+          </button>
+        </div>
+      </form>
+    </ModalBase>
+  );
+};
+

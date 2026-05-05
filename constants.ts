@@ -30,6 +30,7 @@ export const INITIAL_DUMMY_DATA: Ticket[] = [
       arrival: new Date(new Date().setHours(14, 0)).toISOString(),
       called: new Date(new Date().setHours(14, 15)).toISOString(),
       ready: null,
+      taken: null,
       finished: null
     }
   },
@@ -47,6 +48,7 @@ export const INITIAL_DUMMY_DATA: Ticket[] = [
       arrival: new Date(new Date().setHours(14, 30)).toISOString(),
       called: null,
       ready: null,
+      taken: null,
       finished: null
     }
   }

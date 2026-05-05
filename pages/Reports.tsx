@@ -75,6 +75,7 @@ const Reports: React.FC<ReportsProps> = ({
           (statusFilter === "Proses" &&
             (t.status === "active" || t.status === "pending")) ||
           (statusFilter === "Siap" && t.status === "ready") ||
+          (statusFilter === "Follow Up" && t.status === "taken") ||
           (statusFilter === "Selesai" && t.status === "done") ||
           (statusFilter === "Batal" && t.status === "cancelled");
 
@@ -244,7 +245,9 @@ const Reports: React.FC<ReportsProps> = ({
         Datang: formatTime(t.timestamps.arrival),
         Mulai: formatTime(t.timestamps.called),
         Siap: formatTime(t.timestamps.ready),
-        Ambil: formatTime(t.timestamps.finished),
+        Ambil: formatTime(t.timestamps.taken || t.timestamps.finished),
+        "Follow Up": t.followUpResult ? formatTime(t.timestamps.finished) : "-",
+        Hasil: t.followUpResult || "-",
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
@@ -297,6 +300,9 @@ const Reports: React.FC<ReportsProps> = ({
       // 3. Ready (Siap Diambil)
       const ready = allTickets.filter((t) => t.status === "ready");
 
+      // 3a. Follow Up (Taken)
+      const taken = allTickets.filter((t) => t.status === "taken");
+
       // 4. Waiting (Antrian Menunggu)
       const waiting = allTickets.filter((t) => t.status === "waiting");
 
@@ -331,6 +337,7 @@ const Reports: React.FC<ReportsProps> = ({
       appendSection("SEDANG DIKERJAKAN", active);
       appendSection("TERTUNDA (PENDING)", pending);
       appendSection("SIAP DIAMBIL", ready);
+      appendSection("FOLLOW UP", taken);
       appendSection("ANTRIAN MENUNGGU", waiting);
       appendSection("SELESAI HARI INI", finishedToday);
 
@@ -454,6 +461,7 @@ const Reports: React.FC<ReportsProps> = ({
                   <option value="Menunggu">Antri</option>
                   <option value="Proses">Proses</option>
                   <option value="Siap">Siap</option>
+                  <option value="Follow Up">Follow Up</option>
                   <option value="Selesai">Selesai</option>
                   <option value="Batal">Batal</option>
                 </select>
@@ -489,6 +497,8 @@ const Reports: React.FC<ReportsProps> = ({
                     <th className="px-6 py-4 text-indigo-600">Mulai</th>
                     <th className="px-6 py-4 text-emerald-600">Siap</th>
                     <th className="px-6 py-4 text-slate-800">Ambil</th>
+                    <th className="px-6 py-4 text-purple-600 border-l border-slate-100">Follow Up</th>
+                    <th className="px-6 py-4 text-orange-600">Hasil</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -532,7 +542,19 @@ const Reports: React.FC<ReportsProps> = ({
                         {formatTime(t.timestamps.ready)}
                       </td>
                       <td className="px-6 py-4 text-xs font-mono">
-                        {formatTime(t.timestamps.finished)}
+                        {formatTime(t.timestamps.taken || t.timestamps.finished)}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono border-l border-slate-100">
+                        {t.followUpResult ? formatTime(t.timestamps.finished) : "-"}
+                      </td>
+                      <td className="px-6 py-4">
+                        {t.followUpResult ? (
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                            t.followUpResult === 'Berhasil' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {t.followUpResult}
+                          </span>
+                        ) : "-"}
                       </td>
                     </tr>
                   ))}
