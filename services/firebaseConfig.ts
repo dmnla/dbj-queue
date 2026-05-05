@@ -23,6 +23,7 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     storage = getStorage(app);
+    storage.maxUploadRetryTime = 5000; // Fail quickly (5s) instead of waiting forever for CORS/Permissions
     console.log("🔥 Firebase initialized successfully.");
   } catch (error) {
     console.error("Firebase Initialization Error:", error);
