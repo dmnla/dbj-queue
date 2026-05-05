@@ -607,7 +607,7 @@ export const updateStorageSlot = async (
         action: logAction,
         timestamp,
         notes: updates.notes,
-        photo: uploadedPhotoUrl,
+        photos: uploadedPhotoUrl ? [uploadedPhotoUrl] : [],
         storageTicketId: data.storageTicketId,
         customerSnapshot: customerSnapshot,
       });
@@ -681,7 +681,7 @@ export const approveStorageRequest = async (
     notes: `Approved from request #${reqId.slice(-4)}. ${data.notes || ""}`,
     storageTicketId: storageTicketId,
     customerSnapshot,
-    photo: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls[0] : null,
+    photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [],
   });
 
   await runTransaction(db, async (transaction) => {
@@ -771,7 +771,7 @@ export const checkInStorage = async (
     notes: notes,
     storageTicketId: storageTicketId,
     customerSnapshot,
-    photo: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls[0] : null,
+    photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [],
   });
 
   await runTransaction(db, async (transaction) => {

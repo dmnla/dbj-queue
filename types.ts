@@ -61,7 +61,7 @@ export interface StorageLog {
   action: 'check_in' | 'ride_out' | 'ride_return' | 'checkout' | 'extend';
   timestamp: string;
   notes?: string;
-  photo?: string; // Single photo for return/ride logs
+  photos?: string[]; // Changed from photo?: string
   storageTicketId?: string; // Link log to a specific session
   customerSnapshot?: {
       name: string;

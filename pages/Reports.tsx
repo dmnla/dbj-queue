@@ -728,18 +728,17 @@ const Reports: React.FC<ReportsProps> = ({
                                                   "{log.notes}"
                                                 </p>
                                               )}
-                                              {log.photo && (
-                                                <div className="mt-2">
-                                                  <img
-                                                    src={log.photo || ""} // FIX: Ensure not null
-                                                    alt="Bukti"
-                                                    className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                                                    onClick={() =>
-                                                      setPreviewImage(
-                                                        log.photo || null,
-                                                      )
-                                                    }
-                                                  />
+                                              {((log.photos && log.photos.length > 0) || (log as any).photo) && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                  {(log.photos || [(log as any).photo]).map((photo, pIndex) => (
+                                                    <img
+                                                      key={pIndex}
+                                                      src={photo}
+                                                      alt={`Bukti ${pIndex + 1}`}
+                                                      className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                      onClick={() => setPreviewImage(photo)}
+                                                    />
+                                                  ))}
                                                 </div>
                                               )}
                                             </div>

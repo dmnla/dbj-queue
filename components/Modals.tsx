@@ -1295,13 +1295,9 @@ export const StorageHistoryModal = ({
               .reverse()
               .map((log: StorageLog) => {
                 // Helper to extract photos from log in legacy or new format
-                let logPhotos: string[] = [];
-                if (log.photo) logPhotos = [log.photo];
-
-                // To display photos from slot state if they were saved there (older logic) is tricky in logs,
-                // but usually logs don't store the full array.
-                // If we want to see photos, we should rely on what was saved.
-                // For simplicity, this modal primarily shows the log event.
+                let logPhotos: string[] = log.photos || [];
+                // Fallback to legacy single photo if necessary
+                if ((log as any).photo && logPhotos.length === 0) logPhotos = [(log as any).photo];
 
                 return (
                   <div key={log.id} className="ml-6 relative">
@@ -1324,14 +1320,17 @@ export const StorageHistoryModal = ({
                           "{log.notes}"
                         </p>
                       )}
-                      {log.photo && (
-                        <div className="mt-2">
-                          <img
-                            src={log.photo}
-                            alt="Bukti"
-                            className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                            onClick={() => setPreviewImage(log.photo!)}
-                          />
+                      {logPhotos.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {logPhotos.map((photo, pIndex) => (
+                            <img
+                              key={pIndex}
+                              src={photo}
+                              alt={`Bukti ${pIndex + 1}`}
+                              className="w-24 h-24 object-cover rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                              onClick={() => setPreviewImage(photo)}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>
