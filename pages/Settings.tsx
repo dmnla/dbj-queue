@@ -6,6 +6,7 @@ import { wipeServiceData, wipeStorageData, resetTicketNumber } from '../services
 import { EditCustomerModal } from '../components/Modals';
 
 interface SettingsProps {
+  currentBranch: Branch | null;
   mechanics: MechanicDefinition[];
   services: ServiceDefinition[];
   customers: Customer[]; 
@@ -126,6 +127,7 @@ const EditableItem: React.FC<EditableItemProps> = ({
 };
 
 const Settings: React.FC<SettingsProps> = ({ 
+  currentBranch,
   mechanics, 
   services,
   customers,
@@ -195,8 +197,8 @@ const Settings: React.FC<SettingsProps> = ({
       const isAuthorized = verifyAction("RESET SERVICE DATA");
       if (!isAuthorized) return;
 
-      if (confirm("ANDA YAKIN MENGHAPUS SEMUA DATA SERVIS & CUSTOMER? Data tidak dapat dikembalikan.")) {
-          await wipeServiceData();
+      if (confirm(`ANDA YAKIN MENGHAPUS SEMUA DATA SERVIS${currentBranch ? ' UNTUK CABANG INI' : ''}? Data tidak dapat dikembalikan.`)) {
+          await wipeServiceData(currentBranch);
           alert("Data servis berhasil direset.");
       }
   };
@@ -206,8 +208,8 @@ const Settings: React.FC<SettingsProps> = ({
       const isAuthorized = verifyAction("RESET STORAGE DATA");
       if (!isAuthorized) return;
 
-      if (confirm("ANDA YAKIN MENGHAPUS SEMUA DATA STORAGE? Slot akan dikosongkan.")) {
-          await wipeStorageData();
+      if (confirm(`ANDA YAKIN MENGHAPUS SEMUA DATA STORAGE${currentBranch ? ' UNTUK CABANG INI' : ''}? Slot akan dikosongkan.`)) {
+          await wipeStorageData(currentBranch);
           alert("Data storage berhasil direset.");
       }
   };
@@ -217,7 +219,7 @@ const Settings: React.FC<SettingsProps> = ({
       const isAuthorized = verifyAction("RESET COUNTER");
       if (!isAuthorized) return;
 
-      await resetTicketNumber();
+      await resetTicketNumber(currentBranch);
       alert("Nomor tiket berhasil direset ke 0.");
   };
   
@@ -262,7 +264,7 @@ const Settings: React.FC<SettingsProps> = ({
             <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex flex-col justify-between">
                 <div>
                     <p className="text-sm font-bold text-slate-700 mb-1 flex items-center gap-2"><Wrench size={14} /> Reset Service Data</p>
-                    <p className="text-xs text-slate-500 mb-3">Menghapus semua tiket servis dan data pelanggan bengkel.</p>
+                    <p className="text-xs text-slate-500 mb-3">{currentBranch ? `Menghapus semua tiket servis untuk cabang ini.` : `Menghapus semua tiket servis dan data pelanggan bengkel.`}</p>
                 </div>
                 <button 
                     onClick={handleWipeService}

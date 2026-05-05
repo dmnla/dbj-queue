@@ -300,7 +300,7 @@ export const addTicketToCloud = async (
   try {
     await runTransaction(db, async (transaction) => {
       // === 1. PREPARE REFS & DETERMINE ID ===
-      const configRef = doc(db, "settings", "config");
+      const configRef = doc(db, "settings", `config_${branch}`);
       const ticketRef = doc(db, "tickets", uniqueDocId);
 
       // Determine Customer Ref & ID outside getting
@@ -934,11 +934,18 @@ export const wipeDatabase = async () => {
   await wipeStorageData();
 };
 
-export const wipeServiceData = async () => {
+export const wipeServiceData = async (branch?: string | null) => {
   if (!db) return;
   const collections = ["tickets", "customers"];
   for (const colName of collections) {
-    const q = query(collection(db, colName));
+    let q;
+    if (colName === "tickets" && branch) {
+      q = query(collection(db, colName), where("branch", "==", branch));
+    } else if (colName === "customers" && branch) {
+      continue; // Don't wipe cross-branch customers when resetting a specific branch
+    } else {
+      q = query(collection(db, colName));
+    }
     const snap = await getDocs(q);
     const batch = writeBatch(db);
     snap.docs.forEach((d) => batch.delete(d.ref));
@@ -946,8 +953,12 @@ export const wipeServiceData = async () => {
   }
 };
 
-export const wipeStorageData = async () => {
+export const wipeStorageData = async (branch?: string | null) => {
   if (!db) return;
+  // Storage is currently scoped globally or PIK only.
+  // If branch is MK, we skip wiping storage to avoid cross-branch wipes
+  if (branch === "mk") return; 
+
   const collections = ["storageSlots", "storageRequests"];
   for (const colName of collections) {
     const q = query(collection(db, colName));
@@ -959,9 +970,10 @@ export const wipeStorageData = async () => {
   await initializeStorageSlots();
 };
 
-export const resetTicketNumber = async () => {
+export const resetTicketNumber = async (branch?: string | null) => {
   if (!db) return;
-  await setDoc(doc(db, "settings", "config"), { ticketCounter: 0 });
+  const docId = branch ? `config_${branch}` : "config";
+  await setDoc(doc(db, "settings", docId), { ticketCounter: 0 });
 };
 
 export const createStorageRequest = async (

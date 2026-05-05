@@ -313,6 +313,7 @@ function App() {
                     path="/settings"
                     element={
                       <Settings
+                        currentBranch={currentBranch}
                         mechanics={mechanics}
                         services={services}
                         customers={customers}
