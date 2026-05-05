@@ -106,6 +106,13 @@ const Reports: React.FC<ReportsProps> = ({
       );
   }, [tickets, searchTerm, statusFilter, mechanicFilter, startDate, endDate]);
 
+  const [servicePage, setServicePage] = useState(1);
+  const [serviceLimit, setServiceLimit] = useState(15);
+  React.useEffect(() => { setServicePage(1); }, [searchTerm, statusFilter, mechanicFilter, startDate, endDate]);
+
+  const totalServicePages = Math.ceil(filteredTickets.length / serviceLimit);
+  const displayedTickets = filteredTickets.slice((servicePage - 1) * serviceLimit, servicePage * serviceLimit);
+
   // --- STORAGE LOGIC (SESSIONS) ---
   interface StorageSession {
     id: string; // The storageTicketId
@@ -216,6 +223,13 @@ const Reports: React.FC<ReportsProps> = ({
         s.bikeModel.toLowerCase().includes(q),
     );
   }, [storageSessions, storageSearch]);
+
+  const [storagePage, setStoragePage] = useState(1);
+  const [storageLimit, setStorageLimit] = useState(15);
+  React.useEffect(() => { setStoragePage(1); }, [storageSearch]);
+
+  const totalStoragePages = Math.ceil(filteredStorageSessions.length / storageLimit);
+  const displayedStorageSessions = filteredStorageSessions.slice((storagePage - 1) * storageLimit, storagePage * storageLimit);
 
   const exportExcel = () => {
     if (activeTab === "service") {
@@ -478,7 +492,7 @@ const Reports: React.FC<ReportsProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredTickets.map((t) => (
+                  {displayedTickets.map((t) => (
                     <tr
                       key={t.id}
                       className="hover:bg-slate-50 transition-colors"
@@ -524,6 +538,42 @@ const Reports: React.FC<ReportsProps> = ({
                   ))}
                 </tbody>
               </table>
+            </div>
+            
+            {/* SERVICE PAGINATION */}
+            <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-white border-t border-slate-100 gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 uppercase">Tampil</span>
+                <select
+                  className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={serviceLimit}
+                  onChange={(e) => setServiceLimit(Number(e.target.value))}
+                >
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-xs font-bold text-slate-500 uppercase">per halaman</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setServicePage(p => Math.max(1, p - 1))}
+                  disabled={servicePage === 1}
+                  className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${servicePage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                >
+                  Prev
+                </button>
+                <span className="text-xs font-bold text-slate-600">
+                  Hal {servicePage} dari {totalServicePages || 1}
+                </span>
+                <button
+                  onClick={() => setServicePage(p => Math.min(totalServicePages, p + 1))}
+                  disabled={servicePage === totalServicePages || totalServicePages === 0}
+                  className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${servicePage === totalServicePages || totalServicePages === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </>
@@ -583,7 +633,7 @@ const Reports: React.FC<ReportsProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredStorageSessions.length === 0 ? (
+                      {displayedStorageSessions.length === 0 ? (
                         <tr>
                           <td
                             colSpan={9}
@@ -593,7 +643,7 @@ const Reports: React.FC<ReportsProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredStorageSessions.map((s) => (
+                        displayedStorageSessions.map((s) => (
                           <React.Fragment key={s.id}>
                             <tr
                               className={`cursor-pointer transition-colors ${expandedSessionId === s.id ? "bg-purple-50" : "hover:bg-purple-50/30"}`}
@@ -706,6 +756,43 @@ const Reports: React.FC<ReportsProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {/* STORAGE PAGINATION */}
+                <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-white border-t border-slate-100 gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-purple-400 uppercase">Tampil</span>
+                    <select
+                      className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      value={storageLimit}
+                      onChange={(e) => setStorageLimit(Number(e.target.value))}
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <span className="text-xs font-bold text-purple-400 uppercase">per halaman</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setStoragePage(p => Math.max(1, p - 1))}
+                      disabled={storagePage === 1}
+                      className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${storagePage === 1 ? 'bg-purple-50 text-purple-300 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'}`}
+                    >
+                      Prev
+                    </button>
+                    <span className="text-xs font-bold text-slate-600">
+                      Hal {storagePage} dari {totalStoragePages || 1}
+                    </span>
+                    <button
+                      onClick={() => setStoragePage(p => Math.min(totalStoragePages, p + 1))}
+                      disabled={storagePage === totalStoragePages || totalStoragePages === 0}
+                      className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${storagePage === totalStoragePages || totalStoragePages === 0 ? 'bg-purple-50 text-purple-300 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'}`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+
               </div>
             </>
           )}

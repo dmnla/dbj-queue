@@ -14,12 +14,7 @@ import {
   runTransaction,
   where,
 } from "firebase/firestore";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
+// Firebase storage imports removed since we now use Cloudinary
 
 import {
   Ticket,
@@ -34,25 +29,59 @@ import {
 } from "../types";
 import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 
-// --- HELPER: FILE UPLOAD ---
+import imageCompression from 'browser-image-compression';
+
+// --- HELPER: FILE UPLOAD (CLOUDINARY) ---
 const uploadFilesToStorage = async (
   slotId: string,
   files: File[],
 ): Promise<string[]> => {
-  if (!storage) throw new Error("Firebase Storage is not initialized");
-  if (!storage.app.options.storageBucket) {
-    throw new Error("Missing storageBucket in Firebase Config (VITE_FIREBASE_STORAGE_BUCKET). Tolong pastikan environment variable ini terisi di Vercel.");
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error("Missing Cloudinary configuration (VITE_CLOUDINARY_CLOUD_NAME & VITE_CLOUDINARY_UPLOAD_PRESET). Tolong pastikan environment variable ini terisi di Vercel.");
   }
+
+  const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
   const urls: string[] = [];
+
   for (const file of files) {
-    // Path matches: storage_photos/{slotId}/{timestamp}_{filename}
-    const storageRef = ref(
-      storage,
-      `storage_photos/${slotId}/${Date.now()}_${file.name}`,
-    );
-    const snapshot = await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(snapshot.ref);
-    urls.push(url);
+    let fileToUpload = file;
+    
+    // Compress image
+    if (file.type.startsWith('image/')) {
+      try {
+        const options = {
+          maxSizeMB: 2,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
+        };
+        fileToUpload = await imageCompression(file, options);
+      } catch (error) {
+        console.error("Error compressing image, proceeding with original:", error);
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+    formData.append('upload_preset', uploadPreset);
+    // Optional: organize in folders
+    formData.append('folder', `storage_photos/${slotId}`);
+
+    const response = await fetch(cloudinaryUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Cloudinary upload failed:", errText);
+      throw new Error(`Cloudinary upload failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    urls.push(data.secure_url);
   }
   return urls;
 };
