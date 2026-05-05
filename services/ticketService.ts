@@ -681,6 +681,7 @@ export const approveStorageRequest = async (
     notes: `Approved from request #${reqId.slice(-4)}. ${data.notes || ""}`,
     storageTicketId: storageTicketId,
     customerSnapshot,
+    photo: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls[0] : null,
   });
 
   await runTransaction(db, async (transaction) => {
@@ -770,6 +771,7 @@ export const checkInStorage = async (
     notes: notes,
     storageTicketId: storageTicketId,
     customerSnapshot,
+    photo: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls[0] : null,
   });
 
   await runTransaction(db, async (transaction) => {
