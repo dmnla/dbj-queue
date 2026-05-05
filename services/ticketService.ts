@@ -89,6 +89,7 @@ const uploadFilesToStorage = async (
 // --- HELPER: ARCHIVE PHOTOS ---
 const archiveStoragePhotos = async (
   slotId: string,
+  storageTicketId: string | undefined,
   urls: string[] | undefined,
 ) => {
   if (!urls || urls.length === 0 || !db) return;
@@ -99,6 +100,7 @@ const archiveStoragePhotos = async (
   const archiveDoc = doc(collection(db, "archivedPhotos"));
   await setDoc(archiveDoc, {
     slotId,
+    storageTicketId,
     urls,
     checkoutDate: checkoutDate.toISOString(),
     deleteAfter: expiryDate.toISOString(),
@@ -577,8 +579,21 @@ export const updateStorageSlot = async (
     const slotSnap = await getDoc(doc(db, "storageSlots", slotId));
     if (slotSnap.exists()) {
       const data = slotSnap.data() as StorageSlot;
-      if (data.photos && data.photos.length > 0) {
-        await archiveStoragePhotos(slotId, data.photos);
+      const sessionPhotos: string[] = [];
+      if (data.photos) sessionPhotos.push(...data.photos);
+      
+      const history = data.history || [];
+      history.forEach((h: any) => {
+         if (h.storageTicketId === data.storageTicketId && h.photos) {
+             sessionPhotos.push(...h.photos);
+         }
+      });
+      if (uploadedPhotoUrl) {
+          sessionPhotos.push(uploadedPhotoUrl);
+      }
+
+      if (sessionPhotos.length > 0) {
+        await archiveStoragePhotos(slotId, data.storageTicketId, sessionPhotos);
       }
     }
   }
