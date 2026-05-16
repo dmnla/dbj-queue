@@ -249,6 +249,7 @@ const Reports: React.FC<ReportsProps> = ({
         Ambil: formatTime(t.timestamps.taken || t.timestamps.finished),
         "Follow Up": t.followUpResult ? formatTime(t.timestamps.finished) : "-",
         Hasil: t.followUpResult || "-",
+        Bukti: t.followUpPhotoUrl || "-",
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
@@ -500,6 +501,7 @@ const Reports: React.FC<ReportsProps> = ({
                     <th className="px-6 py-4 text-slate-800">Ambil</th>
                     <th className="px-6 py-4 text-purple-600 border-l border-slate-100">Follow Up</th>
                     <th className="px-6 py-4 text-orange-600">Hasil</th>
+                    <th className="px-6 py-4 text-blue-600">Bukti</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -549,25 +551,26 @@ const Reports: React.FC<ReportsProps> = ({
                         {t.followUpResult ? formatTime(t.timestamps.finished) : "-"}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          {t.followUpResult ? (
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase text-center ${
-                              t.followUpResult === 'Berhasil' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {t.followUpResult}
-                            </span>
-                          ) : "-"}
-                          {t.followUpPhotoUrl && (
-                            <a 
-                              href={t.followUpPhotoUrl} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="text-[10px] text-blue-600 font-bold uppercase hover:underline flex items-center justify-center gap-1"
-                            >
-                              <ImageIcon size={10} /> Bukti Chat
-                            </a>
-                          )}
-                        </div>
+                        {t.followUpResult ? (
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase text-center ${
+                            t.followUpResult === 'Berhasil' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {t.followUpResult}
+                          </span>
+                        ) : "-"}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {t.followUpPhotoUrl ? (
+                          <a 
+                            href={t.followUpPhotoUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors shadow-sm"
+                            title="Lihat Bukti Chat"
+                          >
+                            <ImageIcon size={16} />
+                          </a>
+                        ) : "-"}
                       </td>
                     </tr>
                   ))}
