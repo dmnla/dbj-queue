@@ -21,6 +21,7 @@ import {
   Bike,
   AlertCircle,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -548,13 +549,25 @@ const Reports: React.FC<ReportsProps> = ({
                         {t.followUpResult ? formatTime(t.timestamps.finished) : "-"}
                       </td>
                       <td className="px-6 py-4">
-                        {t.followUpResult ? (
-                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                            t.followUpResult === 'Berhasil' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {t.followUpResult}
-                          </span>
-                        ) : "-"}
+                        <div className="flex flex-col gap-1">
+                          {t.followUpResult ? (
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase text-center ${
+                              t.followUpResult === 'Berhasil' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {t.followUpResult}
+                            </span>
+                          ) : "-"}
+                          {t.followUpPhotoUrl && (
+                            <a 
+                              href={t.followUpPhotoUrl} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="text-[10px] text-blue-600 font-bold uppercase hover:underline flex items-center justify-center gap-1"
+                            >
+                              <ImageIcon size={10} /> Bukti Chat
+                            </a>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

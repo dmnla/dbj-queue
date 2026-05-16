@@ -25,7 +25,7 @@ import {
   StorageLog,
   StorageRequest,
 } from "../types";
-import { formatTime } from "../services/ticketService";
+import { formatTime, uploadFollowUpScreenshot } from "../services/ticketService";
 
 interface ModalBaseProps {
   title: string;
@@ -1690,6 +1690,171 @@ export const KendalaModal = ({ isOpen, onClose, ticket, services, onConfirm }: a
             className="bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-black uppercase tracking-widest shadow-lg transition-transform active:scale-95"
           >
             Buat Tiket Antrian
+          </button>
+        </div>
+      </form>
+    </ModalBase>
+  );
+};
+
+export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPhoto(null);
+      setPreview(null);
+      setIsUploading(false);
+    }
+
+    const globalPaste = (e: ClipboardEvent) => {
+      if (!isOpen) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) setFile(file);
+        }
+      }
+    };
+
+    window.addEventListener("paste", globalPaste);
+    return () => window.removeEventListener("paste", globalPaste);
+  }, [isOpen]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setFile(file);
+  };
+
+  const setFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Hanya file gambar yang diperbolehkan.");
+      return;
+    }
+    setPhoto(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) setFile(file);
+      }
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) setFile(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!photo || !ticket) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadFollowUpScreenshot(ticket, photo);
+      if (url) {
+        onConfirm(ticket, url);
+        onClose();
+      } else {
+        alert("Gagal mengunggah foto. Silakan coba lagi.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengunggah.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <ModalBase isOpen={isOpen} title="Bukti Follow Up" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-blue-50 text-blue-700 text-sm p-4 rounded-xl border border-blue-100 flex items-start gap-3">
+          <ImageIcon size={20} className="mt-0.5 flex-shrink-0" />
+          <p>
+            Harap lampirkan <strong>Screenshot chat WhatsApp</strong> sebagai bukti follow up telah selesai.
+          </p>
+        </div>
+
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          onPaste={onPaste}
+          onClick={() => fileInputRef.current?.click()}
+          className={`relative group border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center cursor-pointer min-h-[200px] ${
+            preview ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'
+          }`}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
+
+          {preview ? (
+            <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-md">
+              <img src={preview} alt="Preview" className="w-full h-full object-contain bg-black/5" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <p className="text-white font-bold text-sm flex items-center gap-2">
+                  <UploadCloud size={20} /> Klik atau Drag untuk ganti
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="w-16 h-16 rounded-full bg-blue-100/50 flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+                <UploadCloud size={32} />
+              </div>
+              <div className="text-center">
+                <p className="text-slate-800 font-black uppercase tracking-widest text-sm mb-1">
+                  Upload Screenshot
+                </p>
+                <p className="text-slate-500 text-xs font-medium">
+                  Klik, Drag & Drop, atau <strong>Paste (Ctrl+V)</strong> di sini
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-black uppercase tracking-widest text-xs hover:bg-slate-50 transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={!photo || isUploading}
+            className={`flex-1 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-md transition-all flex items-center justify-center gap-2 ${
+              !photo || isUploading
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]"
+            }`}
+          >
+            {isUploading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Check size={18} />
+            )}
+            {isUploading ? "Mengunggah..." : "Simpan Selesai"}
           </button>
         </div>
       </form>

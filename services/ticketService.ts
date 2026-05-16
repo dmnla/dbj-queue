@@ -13,6 +13,7 @@ import {
   getDoc,
   runTransaction,
   where,
+  addDoc,
 } from "firebase/firestore";
 // Firebase storage imports removed since we now use Cloudinary
 
@@ -32,9 +33,72 @@ import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 import imageCompression from 'browser-image-compression';
 
 // --- HELPER: FILE UPLOAD (CLOUDINARY) ---
+export const archivePhotoToCloud = async (urls: string[], days: number = 60) => {
+  if (!db || urls.length === 0) return;
+  const expiry = new Date();
+  expiry.setDate(expiry.getDate() + days);
+  
+  await addDoc(collection(db, "archivedPhotos"), {
+    urls,
+    deleteAfter: expiry.toISOString(),
+    timestamp: new Date().toISOString(),
+    type: "follow_up"
+  });
+};
+
+export const uploadFollowUpScreenshot = async (
+  ticket: Ticket,
+  file: File
+): Promise<string | null> => {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+  if (!cloudName || !uploadPreset) {
+    console.error("Cloudinary config missing.");
+    return null;
+  }
+
+  try {
+    const config = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1280,
+      useWebWorker: true,
+    };
+    const compressedFile = await imageCompression(file, config);
+
+    const formData = new FormData();
+    formData.append('file', compressedFile);
+    formData.append('upload_preset', uploadPreset);
+    
+    // Folder: follow_up/[NAME] - [SEPEDA] - [YYYY/MM/DD]
+    const dateStr = new Date().toISOString().split('T')[0].split('-').join('/');
+    const folderPath = `follow_up/${ticket.customerName} - ${ticket.unitSepeda} - ${dateStr}`;
+    formData.append('folder', folderPath);
+
+    const response = await fetch(cloudinaryUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const url = data.secure_url;
+      // Also archive this for 60 days
+      await archivePhotoToCloud([url], 60);
+      return url;
+    }
+  } catch (err) {
+    console.error("Upload error:", err);
+  }
+  return null;
+};
+
 const uploadFilesToStorage = async (
   slotId: string,
   files: File[],
+  customerName?: string,
+  bikeModel?: string
 ): Promise<string[]> => {
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -66,8 +130,13 @@ const uploadFilesToStorage = async (
     const formData = new FormData();
     formData.append('file', fileToUpload);
     formData.append('upload_preset', uploadPreset);
-    // Optional: organize in folders
-    formData.append('folder', `storage_photos/${slotId}`);
+    
+    // Organize in folders: storage_photos/A-01/NAME - BIKE
+    let folderPath = `storage_photos/${slotId}`;
+    if (customerName && bikeModel) {
+      folderPath += `/${customerName} - ${bikeModel}`;
+    }
+    formData.append('folder', folderPath);
 
     const response = await fetch(cloudinaryUrl, {
       method: 'POST',
@@ -388,7 +457,8 @@ export const updateTicketStatusInCloud = async (
   mechanic?: string,
   notes?: string,
   reason?: string,
-  followUpResult?: 'Berhasil' | 'Kendala'
+  followUpResult?: 'Berhasil' | 'Kendala',
+  followUpPhotoUrl?: string
 ) => {
   if (!db) return;
   const updates: any = { status };
@@ -403,6 +473,7 @@ export const updateTicketStatusInCloud = async (
   if (mechanic !== undefined) updates.mechanic = mechanic;
   if (reason !== undefined) updates.cancellationReason = reason;
   if (followUpResult !== undefined) updates.followUpResult = followUpResult;
+  if (followUpPhotoUrl !== undefined) updates.followUpPhotoUrl = followUpPhotoUrl;
 
   let finalNotes = notes;
   if (notes !== undefined && status === "pending" && currentTicket.notes) {
@@ -586,14 +657,24 @@ export const updateStorageSlot = async (
 
   let uploadedPhotoUrl: string | undefined = undefined;
   if (logPhoto) {
-    const urls = await uploadFilesToStorage(slotId, [logPhoto]);
+    // Fetch slot to get name and bike for naming the subfolder
+    const slotSnap = await getDoc(doc(db, "storageSlots", slotId));
+    let custName = "Unknown";
+    let bikeModel = "Unknown";
+    if (slotSnap.exists()) {
+      const data = slotSnap.data();
+      custName = data.customerName || "Unknown";
+      bikeModel = data.bikeModel || "Unknown";
+    }
+    const urls = await uploadFilesToStorage(slotId, [logPhoto], custName, bikeModel);
     if (urls.length > 0) uploadedPhotoUrl = urls[0];
   }
 
   if (logAction === "checkout") {
-    const slotSnap = await getDoc(doc(db, "storageSlots", slotId));
-    if (slotSnap.exists()) {
-      const data = slotSnap.data() as StorageSlot;
+    // Re-fetch here specifically to have current state if we didn't fetch above
+    const slotSnapForCheckout = await getDoc(doc(db, "storageSlots", slotId));
+    if (slotSnapForCheckout.exists()) {
+      const data = slotSnapForCheckout.data() as StorageSlot;
       const sessionPhotos: string[] = [];
       if (data.photos) sessionPhotos.push(...data.photos);
       
@@ -675,7 +756,7 @@ export const approveStorageRequest = async (
   // 0. UPLOAD PHOTOS TO STORAGE FIRST
   let uploadedPhotoUrls: string[] = [];
   if (data.photos && data.photos.length > 0) {
-    uploadedPhotoUrls = await uploadFilesToStorage(slotId, data.photos);
+    uploadedPhotoUrls = await uploadFilesToStorage(slotId, data.photos, data.name, data.bikeModel);
   }
 
   // Determine Customer ID logic OUTSIDE transaction to allow searching
@@ -785,7 +866,7 @@ export const checkInStorage = async (
 
   let uploadedPhotoUrls: string[] = [];
   if (photos && photos.length > 0) {
-    uploadedPhotoUrls = await uploadFilesToStorage(slotId, photos);
+    uploadedPhotoUrls = await uploadFilesToStorage(slotId, photos, customer.name, bikeModel);
   }
   const inDate = safeDate(startDate);
   const expiryDate = safeDate(endDate);

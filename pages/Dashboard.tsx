@@ -15,6 +15,7 @@ import {
   CancelModal,
   EditServicesModal,
   KendalaModal,
+  FollowUpModal,
 } from "../components/Modals";
 import {
   Plus,
@@ -47,7 +48,8 @@ interface DashboardProps {
     mechanic?: string,
     notes?: string,
     reason?: string,
-    followUpResult?: 'Berhasil' | 'Kendala'
+    followUpResult?: 'Berhasil' | 'Kendala',
+    followUpPhotoUrl?: string
   ) => void;
   updateTicketServices: (
     id: string,
@@ -83,6 +85,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     ticket: Ticket | null;
   }>({ isOpen: false, ticket: null });
   const [kendalaModalData, setKendalaModalData] = useState<{
+    isOpen: boolean;
+    ticket: Ticket | null;
+  }>({ isOpen: false, ticket: null });
+  const [followUpModalData, setFollowUpModalData] = useState<{
     isOpen: boolean;
     ticket: Ticket | null;
   }>({ isOpen: false, ticket: null });
@@ -298,7 +304,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </button>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateTicketStatus(t.id, "done", undefined, undefined, undefined, 'Berhasil')}
+                        onClick={() => setFollowUpModalData({ isOpen: true, ticket: t })}
                         className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-black text-xs py-2 rounded-lg shadow-sm transition-colors uppercase tracking-widest"
                       >
                         <CheckCircle size={14} /> Selesai
@@ -373,6 +379,15 @@ const Dashboard: React.FC<DashboardProps> = ({
             notes,
             undefined
           );
+        }}
+      />
+
+      <FollowUpModal
+        isOpen={followUpModalData.isOpen}
+        onClose={() => setFollowUpModalData({ isOpen: false, ticket: null })}
+        ticket={followUpModalData.ticket}
+        onConfirm={(ticket: Ticket, photoUrl: string) => {
+          updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, 'Berhasil', photoUrl);
         }}
       />
     </div>
