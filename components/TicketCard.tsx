@@ -64,7 +64,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
       
       {/* Header Row */}
       <div className="flex justify-between items-center gap-2 mb-1">
-        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden flex-wrap">
             <span className={`font-mono font-black text-slate-400 tracking-tighter truncate ${isLongId ? 'text-lg' : 'text-2xl'}`}>
               {displayId}
             </span>
@@ -78,6 +78,11 @@ const TicketCard: React.FC<TicketCardProps> = ({
             }`}>
             {getStatusLabel(ticket.status)}
             </span>
+            {!ticket.dealposOrderId && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-tight whitespace-nowrap">
+                Manual Card
+              </span>
+            )}
         </div>
         
         {/* Top Right Action Buttons - Compact Icons */}

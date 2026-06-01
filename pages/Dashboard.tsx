@@ -41,6 +41,7 @@ interface DashboardProps {
     svcs: string[],
     notes: string,
     customerId?: string,
+    dealposOrderId?: string,
   ) => void;
   updateTicketStatus: (
     id: string,
@@ -48,7 +49,7 @@ interface DashboardProps {
     mechanic?: string,
     notes?: string,
     reason?: string,
-    followUpResult?: 'Berhasil' | 'Kendala',
+    followUpResult?: string,
     followUpPhotoUrl?: string
   ) => void;
   updateTicketServices: (
@@ -56,6 +57,8 @@ interface DashboardProps {
     serviceTypes: string[],
     notes?: string,
   ) => void;
+  connectTicketToDealpos?: (id: string, dealposOrderId: string) => void;
+  currentBranch: any;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -66,6 +69,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   addTicket,
   updateTicketStatus,
   updateTicketServices,
+  connectTicketToDealpos,
+  currentBranch,
 }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [assignModalData, setAssignModalData] = useState<{
@@ -285,39 +290,18 @@ const Dashboard: React.FC<DashboardProps> = ({
           bg="bg-purple-50/50"
         >
           {followUpTickets.map((t) => {
-            const cleanPhone = t.phone.startsWith("0")
-              ? "62" + t.phone.slice(1)
-              : t.phone;
             return (
               <TicketCard
                 key={t.id}
                 ticket={t}
                 customActions={
-                  <div className="flex flex-col gap-2 mt-2">
+                  <div className="mt-2">
                     <button
-                      onClick={() =>
-                        window.open(`https://wa.me/${cleanPhone}`, "_blank")
-                      }
-                      className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-black text-xs py-2 rounded-lg shadow-sm transition-colors uppercase tracking-widest"
+                      onClick={() => setFollowUpModalData({ isOpen: true, ticket: t })}
+                      className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs py-2.5 rounded-lg shadow-sm transition-all hover:scale-[1.01] uppercase tracking-widest"
                     >
-                      <MessageSquare size={14} /> Follow Up WA
+                      <MessageSquare size={14} /> Follow Up
                     </button>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setFollowUpModalData({ isOpen: true, ticket: t })}
-                        className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-black text-xs py-2 rounded-lg shadow-sm transition-colors uppercase tracking-widest"
-                      >
-                        <CheckCircle size={14} /> Selesai
-                      </button>
-                      <button
-                        onClick={() =>
-                          setKendalaModalData({ isOpen: true, ticket: t })
-                        }
-                        className="flex-1 flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-black text-xs py-2 rounded-lg border border-red-200 transition-colors uppercase tracking-widest"
-                      >
-                        <AlertTriangle size={14} /> Kendala
-                      </button>
-                    </div>
                   </div>
                 }
               />
@@ -333,6 +317,9 @@ const Dashboard: React.FC<DashboardProps> = ({
         services={services}
         customers={customers}
         onAdd={addTicket}
+        onConnect={connectTicketToDealpos}
+        tickets={tickets}
+        currentBranch={currentBranch}
       />
       <AssignMechanicModal
         isOpen={assignModalData.isOpen}
@@ -386,8 +373,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         isOpen={followUpModalData.isOpen}
         onClose={() => setFollowUpModalData({ isOpen: false, ticket: null })}
         ticket={followUpModalData.ticket}
-        onConfirm={(ticket: Ticket, photoUrl: string) => {
-          updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, 'Berhasil', photoUrl);
+        onConfirm={(ticket: any, outcome: string, photoUrl?: string) => {
+          updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, outcome, photoUrl);
         }}
       />
     </div>

@@ -33,6 +33,7 @@ import {
   addTicketToCloud,
   updateTicketStatusInCloud,
   updateTicketServicesInCloud,
+  connectTicketToDealposOrderIdInCloud,
   addMechanicToCloud,
   updateMechanicInCloud,
   removeMechanicFromCloud,
@@ -178,9 +179,10 @@ function App() {
     svcs: string[],
     notes: string,
     customerId?: string,
+    dealposOrderId?: string,
   ) => {
     if (!currentBranch) return;
-    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId);
+    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId);
   };
 
   const updateTicketStatus = (
@@ -189,7 +191,7 @@ function App() {
     mechanic?: string,
     notes?: string,
     reason?: string,
-    followUpResult?: 'Berhasil' | 'Kendala',
+    followUpResult?: string,
     followUpPhotoUrl?: string
   ) => {
     const ticketToUpdate = tickets.find((t) => t.id === id);
@@ -212,6 +214,10 @@ function App() {
     notes?: string,
   ) => {
     updateTicketServicesInCloud(id, serviceTypes, notes);
+  };
+
+  const connectTicketToDealpos = (id: string, dealposOrderId: string) => {
+    connectTicketToDealposOrderIdInCloud(id, dealposOrderId);
   };
 
   // Settings Handlers
@@ -264,6 +270,8 @@ function App() {
                         addTicket={addTicket}
                         updateTicketStatus={updateTicketStatus}
                         updateTicketServices={updateTicketServices}
+                        connectTicketToDealpos={connectTicketToDealpos}
+                        currentBranch={currentBranch}
                       />
                     }
                   />

@@ -35,8 +35,10 @@ export interface Ticket {
   notes: string;
   cancellationReason?: string;
   timestamps: Timestamps;
-  followUpResult?: 'Berhasil' | 'Kendala';
+  followUpResult?: string;
   followUpPhotoUrl?: string;
+  lastStatusChange?: string;
+  dealposOrderId?: string;
 }
 
 export interface KpiData {

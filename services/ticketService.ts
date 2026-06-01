@@ -35,15 +35,19 @@ import imageCompression from 'browser-image-compression';
 // --- HELPER: FILE UPLOAD (CLOUDINARY) ---
 export const archivePhotoToCloud = async (urls: string[], days: number = 60) => {
   if (!db || urls.length === 0) return;
-  const expiry = new Date();
-  expiry.setDate(expiry.getDate() + days);
-  
-  await addDoc(collection(db, "archivedPhotos"), {
-    urls,
-    deleteAfter: expiry.toISOString(),
-    timestamp: new Date().toISOString(),
-    type: "follow_up"
-  });
+  try {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + days);
+    
+    await addDoc(collection(db, "archivedPhotos"), {
+      urls,
+      deleteAfter: expiry.toISOString(),
+      timestamp: new Date().toISOString(),
+      type: "follow_up"
+    });
+  } catch (error) {
+    console.error("Failed to archive follow up photo to Firestore (archivedPhotos) gracefully:", error);
+  }
 };
 
 export const uploadFollowUpScreenshot = async (
@@ -72,8 +76,11 @@ export const uploadFollowUpScreenshot = async (
     formData.append('upload_preset', uploadPreset);
     
     // Folder: follow_up/[NAME] - [SEPEDA] - [YYYY/MM/DD]
+    // Sanitize folder path inputs to prevent Cloudinary folder creation/naming errors
+    const sanitizedCustomer = (ticket.customerName || 'customer').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+    const sanitizedUnit = (ticket.unitSepeda || 'unit').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
     const dateStr = new Date().toISOString().split('T')[0].split('-').join('/');
-    const folderPath = `follow_up/${ticket.customerName} - ${ticket.unitSepeda} - ${dateStr}`;
+    const folderPath = `follow_up/${sanitizedCustomer} - ${sanitizedUnit} - ${dateStr}`;
     formData.append('folder', folderPath);
 
     const response = await fetch(cloudinaryUrl, {
@@ -84,8 +91,12 @@ export const uploadFollowUpScreenshot = async (
     if (response.ok) {
       const data = await response.json();
       const url = data.secure_url;
-      // Also archive this for 60 days
-      await archivePhotoToCloud([url], 60);
+      // Also archive this for 60 days - wrapped inside try/catch so database errors don't block successful uploads
+      try {
+        await archivePhotoToCloud([url], 60);
+      } catch (archErr) {
+        console.error("Failed archiving follow-up photo link, but proceeding because upload succeeded:", archErr);
+      }
       return url;
     }
   } catch (err) {
@@ -134,7 +145,9 @@ const uploadFilesToStorage = async (
     // Organize in folders: storage_photos/A-01/NAME - BIKE
     let folderPath = `storage_photos/${slotId}`;
     if (customerName && bikeModel) {
-      folderPath += `/${customerName} - ${bikeModel}`;
+      const sanitizedCust = customerName.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+      const sanitizedBike = bikeModel.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+      folderPath += `/${sanitizedCust || 'customer'} - ${sanitizedBike || 'bike'}`;
     }
     formData.append('folder', folderPath);
 
@@ -162,20 +175,24 @@ const archiveStoragePhotos = async (
   urls: string[] | undefined,
 ) => {
   if (!urls || urls.length === 0 || !db) return;
-  const checkoutDate = new Date();
-  const expiryDate = new Date(checkoutDate);
-  expiryDate.setDate(expiryDate.getDate() + 60);
+  try {
+    const checkoutDate = new Date();
+    const expiryDate = new Date(checkoutDate);
+    expiryDate.setDate(expiryDate.getDate() + 60);
 
-  const archiveDoc = doc(collection(db, "archivedPhotos"));
-  await setDoc(archiveDoc, {
-    slotId,
-    storageTicketId,
-    urls,
-    checkoutDate: checkoutDate.toISOString(),
-    deleteAfter: expiryDate.toISOString(),
-    notes:
-      "These photos should be cleaned up after deleteAfter date by a CRON or admin task.",
-  });
+    const archiveDoc = doc(collection(db, "archivedPhotos"));
+    await setDoc(archiveDoc, {
+      slotId,
+      storageTicketId,
+      urls,
+      checkoutDate: checkoutDate.toISOString(),
+      deleteAfter: expiryDate.toISOString(),
+      notes:
+        "These photos should be cleaned up after deleteAfter date by a CRON or admin task.",
+    });
+  } catch (err) {
+    console.error("Failed to archive storage photos to Firestore gracefully:", err);
+  }
 };
 
 // --- HELPER: SEED FIRESTORE DEFAULTS ---
@@ -358,6 +375,7 @@ export const addTicketToCloud = async (
   serviceTypes: string[],
   notes: string,
   customerId?: string,
+  dealposOrderId?: string,
 ) => {
   if (!db) return;
   const uniqueDocId = `T-${Date.now()}`;
@@ -435,6 +453,7 @@ export const addTicketToCloud = async (
         status: "waiting",
         notes: notes || null,
         ticketNumber: nextNum.toString(),
+        lastStatusChange: timestamp,
         timestamps: {
           arrival: timestamp,
           called: null,
@@ -442,6 +461,7 @@ export const addTicketToCloud = async (
           taken: null,
           finished: null,
         },
+        dealposOrderId: dealposOrderId || null,
       });
     });
   } catch (e) {
@@ -457,11 +477,14 @@ export const updateTicketStatusInCloud = async (
   mechanic?: string,
   notes?: string,
   reason?: string,
-  followUpResult?: 'Berhasil' | 'Kendala',
+  followUpResult?: string,
   followUpPhotoUrl?: string
 ) => {
   if (!db) return;
   const updates: any = { status };
+  if (status !== currentTicket.status) {
+    updates.lastStatusChange = new Date().toISOString();
+  }
   if (status === "active" && currentTicket.status === "waiting")
     updates["timestamps.called"] = new Date().toISOString();
   if (status === "ready")
@@ -497,6 +520,14 @@ export const updateTicketServicesInCloud = async (
   const updates: any = { serviceTypes };
   if (notes !== undefined) updates.notes = notes;
   await updateDoc(doc(db, "tickets", id), updates);
+};
+
+export const connectTicketToDealposOrderIdInCloud = async (
+  id: string,
+  dealposOrderId: string,
+) => {
+  if (!db) return;
+  await updateDoc(doc(db, "tickets", id), { dealposOrderId });
 };
 
 export const debugFastForwardTaken = async (id: string) => {
