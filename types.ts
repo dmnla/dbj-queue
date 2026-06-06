@@ -2,6 +2,28 @@
 export type TicketStatus = 'waiting' | 'active' | 'pending' | 'ready' | 'taken' | 'done' | 'cancelled';
 export type Branch = 'mk' | 'pik'; // mk = Muara Karang, pik = PIK 2
 
+export enum flag_type {
+  TELAT_UPDATE_ANTRIAN = 'TELAT_UPDATE_ANTRIAN',
+  LATE_FOLLOW_UP = 'LATE_FOLLOW_UP',
+  RESI_HILANG = 'RESI_HILANG',
+  TELAT_SELESAI = 'TELAT_SELESAI',
+  ANOMALI_DURASI_SERVICE = 'ANOMALI_DURASI_SERVICE',
+  TIKET_TERLEWAT = 'TIKET_TERLEWAT',
+  TELAT_UPDATE_SERVICE = 'TELAT_UPDATE_SERVICE',
+  TELAT_UPDATE_SELESAI = 'TELAT_UPDATE_SELESAI'
+}
+
+export enum FlagType {
+  TELAT_UPDATE_ANTRIAN = 'TELAT_UPDATE_ANTRIAN',
+  LATE_FOLLOW_UP = 'LATE_FOLLOW_UP',
+  RESI_HILANG = 'RESI_HILANG',
+  TELAT_SELESAI = 'TELAT_SELESAI',
+  ANOMALI_DURASI_SERVICE = 'ANOMALI_DURASI_SERVICE',
+  TIKET_TERLEWAT = 'TIKET_TERLEWAT',
+  TELAT_UPDATE_SERVICE = 'TELAT_UPDATE_SERVICE',
+  TELAT_UPDATE_SELESAI = 'TELAT_UPDATE_SELESAI'
+}
+
 export interface ServiceDefinition {
   id: string;
   name: string;
@@ -39,6 +61,10 @@ export interface Ticket {
   followUpPhotoUrl?: string;
   lastStatusChange?: string;
   dealposOrderId?: string;
+  serviceSkuCodes?: string[];
+  flags?: flag_type[];
+  flag_types?: flag_type[];
+  overtimeMechanic?: string | null;
 }
 
 export interface KpiData {

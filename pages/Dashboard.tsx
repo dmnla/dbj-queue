@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from "react";
-import { debugFastForwardTaken } from "../services/ticketService";
+import { debugFastForwardTaken, isTicketExcludedFromFollowUp } from "../services/ticketService";
+import { DebriefModal, calculateTicketDuration } from "../components/DebriefModal";
 import {
   Ticket,
   KpiData,
   MechanicDefinition,
   ServiceDefinition,
   Customer,
+  flag_type,
 } from "../types";
 import TicketCard from "../components/TicketCard";
 import {
@@ -42,6 +44,8 @@ interface DashboardProps {
     notes: string,
     customerId?: string,
     dealposOrderId?: string,
+    flags?: flag_type[],
+    serviceSkuCodes?: string[],
   ) => void;
   updateTicketStatus: (
     id: string,
@@ -57,8 +61,26 @@ interface DashboardProps {
     serviceTypes: string[],
     notes?: string,
   ) => void;
-  connectTicketToDealpos?: (id: string, dealposOrderId: string) => void;
+  connectTicketToDealpos?: (
+    id: string,
+    dealposOrderId: string,
+    customerName?: string,
+    phone?: string,
+    serviceSkuCodes?: string[],
+    flags?: flag_type[],
+  ) => void;
   currentBranch: any;
+  ignoredDealposIds?: string[];
+  onIgnoreDealposId?: (orderId: string) => void;
+  isBengkelOpen?: boolean;
+  isOvertimeActive?: boolean;
+  isDebriefInProgress?: boolean;
+  debriefFrozenAt?: string | null;
+  overtimeTicketIds?: string[];
+  overtimeStoppedAt?: string | null;
+  onToggleBengkelOpen?: (isOpen: boolean) => void;
+  onToggleOvertime?: (isActive: boolean) => void;
+  onStopOvertime?: () => Promise<void> | void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -71,8 +93,41 @@ const Dashboard: React.FC<DashboardProps> = ({
   updateTicketServices,
   connectTicketToDealpos,
   currentBranch,
+  ignoredDealposIds = [],
+  onIgnoreDealposId,
+  isBengkelOpen = true,
+  isOvertimeActive = false,
+  isDebriefInProgress = false,
+  debriefFrozenAt = null,
+  overtimeTicketIds = [],
+  overtimeStoppedAt = null,
+  onToggleBengkelOpen,
+  onToggleOvertime,
+  onStopOvertime,
 }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [reconcileTicketId, setReconcileTicketId] = useState<string | null>(null);
+  const [isDebriefModalOpen, setIsDebriefModalOpen] = useState(false);
+  const [confirmStopOvertime, setConfirmStopOvertime] = useState(false);
+
+  const isTicketLockedForAdmin = (ticket: Ticket) => {
+    if (debriefFrozenAt || isDebriefInProgress) {
+      return true;
+    }
+    if (!isBengkelOpen && !isOvertimeActive) {
+      return true;
+    }
+    if (isOvertimeActive) {
+      const ids = Array.isArray(overtimeTicketIds) ? overtimeTicketIds : [];
+      return !ids.includes(ticket.id);
+    }
+    return false;
+  };
+
+  const handleReconcile = (ticket: Ticket) => {
+    setReconcileTicketId(ticket.id);
+    setIsAddModalOpen(true);
+  };
   const [assignModalData, setAssignModalData] = useState<{
     isOpen: boolean;
     ticket: Ticket | null;
@@ -153,6 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const now = new Date().getTime();
   const followUpTickets = tickets.filter((t) => {
     if (t.status !== "taken" || !t.timestamps.taken) return false;
+    if (isTicketExcludedFromFollowUp(t)) return false;
     const takenTime = new Date(t.timestamps.taken).getTime();
     const daysSinceTaken = (now - takenTime) / (1000 * 3600 * 24);
     return daysSinceTaken >= 3;
@@ -170,13 +226,126 @@ const Dashboard: React.FC<DashboardProps> = ({
           </p>
         </div>
         <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center justify-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-black uppercase tracking-widest hover:bg-black shadow-lg active:scale-95 transition-all text-xs md:text-sm"
+          onClick={() => {
+            const isActionDisabled = isOvertimeActive || !!debriefFrozenAt || isDebriefInProgress || (!isBengkelOpen && !isOvertimeActive);
+            if (isActionDisabled) return;
+            setIsAddModalOpen(true);
+          }}
+          disabled={isOvertimeActive || !!debriefFrozenAt || isDebriefInProgress || (!isBengkelOpen && !isOvertimeActive)}
+          className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all text-xs md:text-sm ${
+            (isOvertimeActive || !!debriefFrozenAt || isDebriefInProgress || (!isBengkelOpen && !isOvertimeActive))
+              ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none active:scale-100"
+              : "bg-slate-900 text-white hover:bg-black"
+          }`}
         >
           <Plus size={18} />
-          Tambah Pelanggan
+          {debriefFrozenAt || isDebriefInProgress
+            ? "Antrian Terkunci (Debrief)"
+            : !isBengkelOpen && !isOvertimeActive
+            ? "Bengkel Tutup (Terkunci)"
+            : isOvertimeActive
+            ? "Daftar Terkunci (OT)"
+            : "Tambah Pelanggan"
+          }
         </button>
       </div>
+
+      {/* SECTION: OPERATIONAL HOURS CONTROLS (BUKA / TUTUP BENGKEL & OVERTIME) */}
+      <div className="bg-slate-50 border border-slate-200/60 p-4 md:p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5 w-full md:w-auto">
+          <div className={`p-3 rounded-full flex items-center justify-center ${
+            isBengkelOpen 
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
+              : "bg-rose-50 text-rose-600 border border-rose-200"
+          }`}>
+            <span className="relative flex h-3 w-3">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isBengkelOpen ? "bg-emerald-400" : "bg-rose-400"}`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${isBengkelOpen ? "bg-emerald-500" : "bg-rose-500"}`}></span>
+            </span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400">OPERASIONAL BENGKEL</span>
+              {isOvertimeActive && (
+                <span className="text-[10px] bg-amber-500 text-white px-2.5 py-0.5 rounded-full font-black animate-pulse flex items-center gap-0.5">
+                  ⚡ OVERTIME
+                </span>
+              )}
+            </div>
+            <p className="text-sm md:text-base font-black text-slate-800 uppercase tracking-tight">
+              Status Bengkel: <span className={isBengkelOpen ? "text-emerald-600" : "text-rose-600"}>{isBengkelOpen ? "BUKA" : "TUTUP"}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+          {/* BUKA / TUTUP BENGKEL TOGGLER BUTTONS */}
+          {isOvertimeActive ? (
+            confirmStopOvertime ? (
+              <div className="flex items-center gap-1.5 animate-bounce">
+                <button
+                  onClick={() => {
+                    if (onStopOvertime) {
+                      onStopOvertime();
+                    } else {
+                      onToggleOvertime?.(false);
+                      onToggleBengkelOpen?.(false);
+                    }
+                    setConfirmStopOvertime(false);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all whitespace-nowrap"
+                >
+                  ✅ Ya, Selesai OT!
+                </button>
+                <button
+                  onClick={() => setConfirmStopOvertime(false)}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all whitespace-nowrap"
+                >
+                  Batal
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setConfirmStopOvertime(true);
+                  setTimeout(() => setConfirmStopOvertime(false), 5000);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow flex items-center gap-1.5 transition-all animate-pulse"
+              >
+                🏁 Selesai Lembur
+              </button>
+            )
+          ) : isBengkelOpen ? (
+            <button
+              onClick={() => setIsDebriefModalOpen(true)}
+              className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow flex items-center gap-1.5 transition-all ${
+                isDebriefInProgress
+                  ? "bg-amber-600 hover:bg-amber-700 text-white animate-pulse"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+              }`}
+            >
+              {isDebriefInProgress ? "🔄 LANJUT REKAP" : "TUTUP TOKO"}
+            </button>
+          ) : (
+            <button
+              onClick={() => onToggleBengkelOpen?.(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow flex items-center gap-1.5 transition-all"
+            >
+              BUKA BENGKEL
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isOvertimeActive && (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 shadow-sm flex items-start gap-3">
+          <AlertTriangle size={20} className="shrink-0 text-amber-500 animate-pulse mt-0.5" />
+          <div className="text-xs leading-relaxed text-amber-900 font-sans">
+            <span className="font-black uppercase block tracking-wider mb-0.5">Mode Overtime Aktif & Dashboard Terkunci</span>
+            Waktu pengerjaan lembur dibatasi hanya untuk kartu-kartu pilihan admin. Lembur akan selesai otomatis jika seluruh kartu pilihan lembur telah diselesaikan, atau admin/mekanik dapat menyelesaikan lembur secara manual kapan saja dengan menekan tombol <strong className="uppercase">🏁 Selesai Lembur</strong>. Admin tidak dapat mendaftarkan sepeda baru atau memindahkan kartu lain selama lembur aktif.
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         <KpiCard
@@ -223,11 +392,19 @@ const Dashboard: React.FC<DashboardProps> = ({
               key={t.id}
               ticket={t}
               actionLabel="Proses"
-              onAction={() => setAssignModalData({ isOpen: true, ticket: t })}
+              onAction={() => {
+                if (isOvertimeActive && overtimeTicketIds.includes(t.id) && t.overtimeMechanic) {
+                  updateTicketStatus(t.id, "active", t.overtimeMechanic);
+                } else {
+                  setAssignModalData({ isOpen: true, ticket: t });
+                }
+              }}
               onCancel={() => setCancelModalData({ isOpen: true, ticket: t })}
               onEditServices={() =>
                 setEditModalData({ isOpen: true, ticket: t })
               }
+              onReconcile={handleReconcile}
+              locked={isTicketLockedForAdmin(t)}
             />
           ))}
         </Column>
@@ -261,6 +438,8 @@ const Dashboard: React.FC<DashboardProps> = ({
               onEditServices={() =>
                 setEditModalData({ isOpen: true, ticket: t })
               }
+              onReconcile={handleReconcile}
+              locked={isTicketLockedForAdmin(t)}
             />
           ))}
         </Column>
@@ -278,6 +457,8 @@ const Dashboard: React.FC<DashboardProps> = ({
               ticket={t}
               actionLabel="Unit Diambil"
               onAction={() => updateTicketStatus(t.id, "taken")}
+              onReconcile={handleReconcile}
+              locked={isTicketLockedForAdmin(t)}
             />
           ))}
         </Column>
@@ -294,8 +475,10 @@ const Dashboard: React.FC<DashboardProps> = ({
               <TicketCard
                 key={t.id}
                 ticket={t}
+                onReconcile={handleReconcile}
+                locked={isTicketLockedForAdmin(t)}
                 customActions={
-                  <div className="mt-2">
+                  <div className="mt-2 text-center">
                     <button
                       onClick={() => setFollowUpModalData({ isOpen: true, ticket: t })}
                       className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs py-2.5 rounded-lg shadow-sm transition-all hover:scale-[1.01] uppercase tracking-widest"
@@ -313,13 +496,19 @@ const Dashboard: React.FC<DashboardProps> = ({
       {/* Modals */}
       <CreateTicketModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setReconcileTicketId(null);
+        }}
         services={services}
         customers={customers}
         onAdd={addTicket}
         onConnect={connectTicketToDealpos}
         tickets={tickets}
         currentBranch={currentBranch}
+        ignoredDealposIds={ignoredDealposIds}
+        onIgnoreDealposId={onIgnoreDealposId}
+        initialManualTicketId={reconcileTicketId}
       />
       <AssignMechanicModal
         isOpen={assignModalData.isOpen}
@@ -376,6 +565,20 @@ const Dashboard: React.FC<DashboardProps> = ({
         onConfirm={(ticket: any, outcome: string, photoUrl?: string) => {
           updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, outcome, photoUrl);
         }}
+      />
+
+      <DebriefModal
+        isOpen={isDebriefModalOpen}
+        onClose={() => setIsDebriefModalOpen(false)}
+        branch={currentBranch}
+        tickets={tickets}
+        mechanics={mechanics}
+        isBengkelOpen={isBengkelOpen}
+        isOvertimeActive={isOvertimeActive}
+        isDebriefInProgress={isDebriefInProgress}
+        debriefFrozenAt={debriefFrozenAt}
+        overtimeTicketIds={overtimeTicketIds}
+        overtimeStoppedAt={overtimeStoppedAt}
       />
     </div>
   );

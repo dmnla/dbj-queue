@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Maximize2,
   Minimize2,
+  Ban,
 } from "lucide-react";
 
 interface MechanicModeProps {
@@ -32,6 +33,11 @@ interface MechanicModeProps {
     serviceTypes: string[],
     notes?: string,
   ) => void;
+  isDebriefInProgress?: boolean;
+  isBengkelOpen?: boolean;
+  isOvertimeActive?: boolean;
+  overtimeTicketIds?: string[];
+  onStopOvertime?: () => void;
 }
 
 const MechanicMode: React.FC<MechanicModeProps> = ({
@@ -40,6 +46,11 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
   services,
   updateTicketStatus,
   updateTicketServices,
+  isDebriefInProgress = false,
+  isBengkelOpen = true,
+  isOvertimeActive = false,
+  overtimeTicketIds = [],
+  onStopOvertime,
 }) => {
   const [pendingModal, setPendingModal] = useState<{
     isOpen: boolean;
@@ -54,6 +65,18 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
     ticket: Ticket | null;
   }>({ isOpen: false, ticket: null });
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [confirmStopOvertime, setConfirmStopOvertime] = useState(false);
+
+  const isTicketLocked = (ticket: Ticket) => {
+    if (isDebriefInProgress) return true;
+    if (!isBengkelOpen) {
+      if (isOvertimeActive) {
+        return !overtimeTicketIds.includes(ticket.id);
+      }
+      return true;
+    }
+    return false;
+  };
 
   const ongoingTickets = useMemo(() => {
     return tickets
@@ -100,6 +123,64 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
     <div
       className={`p-4 md:p-8 space-y-6 md:space-y-8 pb-32 ${isFullScreen ? "min-h-screen bg-slate-100" : "max-w-6xl mx-auto"}`}
     >
+      {isDebriefInProgress && (
+        <div className="bg-rose-50 border-2 border-rose-250 p-4 rounded-2xl flex items-center gap-3 text-rose-800">
+          <AlertCircle size={24} className="shrink-0 animate-bounce" />
+          <div className="text-xs font-black uppercase">
+            OPERASIONAL BEKU (DEBRIEF SEBELUM TUTUP TOKO): Kontrol mekanik dinonaktifkan sementara hingga proses input laporan harian selesai.
+          </div>
+        </div>
+      )}
+      {!isBengkelOpen && !isOvertimeActive && (
+        <div className="bg-rose-50 border-2 border-rose-250 p-4 rounded-2xl flex items-center gap-3 text-rose-800">
+          <AlertCircle size={24} className="shrink-0" />
+          <div className="text-xs font-black uppercase">
+            BENGKEL TUTUP: Operasional dan pencatatan waktu resmi dihentikan sementara. Hubungi Admin untuk memulai operasional hari baru.
+          </div>
+        </div>
+      )}
+      {isOvertimeActive && (
+        <div className="bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-800">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={24} className="shrink-0 animate-pulse text-amber-500" />
+            <div className="text-xs font-black uppercase leading-relaxed">
+              MODE OVERTIME: Seluruh durasi terkunci kecuali khusus untuk unit-unit pengerjaan overtime resmi pilihan admin.
+            </div>
+          </div>
+          {onStopOvertime && (
+            confirmStopOvertime ? (
+              <div className="flex items-center gap-1.5 animate-bounce">
+                <button
+                  onClick={() => {
+                    onStopOvertime();
+                    setConfirmStopOvertime(false);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 whitespace-nowrap active:scale-95"
+                >
+                  ✅ Ya, Selesai!
+                </button>
+                <button
+                  onClick={() => setConfirmStopOvertime(false)}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 whitespace-nowrap active:scale-95"
+                >
+                  Batal
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setConfirmStopOvertime(true);
+                  setTimeout(() => setConfirmStopOvertime(false), 5000);
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 whitespace-nowrap active:scale-95"
+              >
+                🏁 Selesai Overtime
+              </button>
+            )
+          )}
+        </div>
+      )}
+
       {/* Header View - Hide in FullScreen to maximize space, or simplify */}
       <div
         className={`flex flex-col sm:flex-row items-center justify-between bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border-2 border-slate-100 gap-4 ${isFullScreen ? "sticky top-2 z-50 shadow-xl" : ""}`}
@@ -162,6 +243,13 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                 key={ticket.id}
                 className="bg-white rounded-2xl md:rounded-[2rem] shadow-xl border-2 border-slate-100 p-5 md:p-8 flex flex-col gap-4 md:gap-6 relative overflow-hidden transition-all hover:border-blue-200"
               >
+                {isTicketLocked(ticket) && (
+                  <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center z-30 transition-all">
+                    <div className="bg-rose-600 border-b-2 border-rose-800 text-white text-[10px] md:text-xs px-4 py-2.5 rounded-xl font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg">
+                      <Ban size={16} /> OPERASIONAL TERKUNCI (DIREKAP)
+                    </div>
+                  </div>
+                )}
                 {/* Corner Tag */}
                 <div
                   className={`absolute top-0 right-0 px-4 md:px-8 py-1.5 md:py-2 rounded-bl-2xl md:rounded-bl-3xl font-black text-[9px] md:text-xs uppercase tracking-widest text-white shadow-md z-20 ${
@@ -217,7 +305,8 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                       </p>
                       <button
                         onClick={() => handleChangeMechanic(ticket)}
-                        className="text-[9px] font-black text-blue-500 border-2 border-blue-100 px-2 py-1 rounded-lg hover:bg-blue-50 uppercase"
+                        disabled={isTicketLocked(ticket)}
+                        className="text-[9px] font-black text-blue-500 border-2 border-blue-100 px-2 py-1 rounded-lg hover:bg-blue-50 uppercase disabled:opacity-35 disabled:cursor-not-allowed"
                       >
                         Ganti
                       </button>
@@ -230,8 +319,15 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                   <div className="flex flex-col sm:flex-row gap-3">
                     {ticket.status === "waiting" && (
                       <button
-                        onClick={() => handleStart(ticket)}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg shadow-green-200 transition-all active:scale-95"
+                        onClick={() => {
+                          if (isOvertimeActive && overtimeTicketIds.includes(ticket.id) && ticket.overtimeMechanic) {
+                            updateTicketStatus(ticket.id, "active", ticket.overtimeMechanic);
+                          } else {
+                            handleStart(ticket);
+                          }
+                        }}
+                        disabled={isTicketLocked(ticket)}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg shadow-green-200 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none"
                       >
                         <PlayCircle size={24} className="md:w-7 md:h-7" />
                         MULAI KERJA
@@ -242,14 +338,16 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                       <>
                         <button
                           onClick={() => handlePending(ticket)}
-                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg transition-all active:scale-95"
+                          disabled={isTicketLocked(ticket)}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                           <AlertCircle size={24} className="md:w-7 md:h-7" />
                           TUNDA
                         </button>
                         <button
                           onClick={() => handleFinish(ticket)}
-                          className="flex-[1.5] bg-green-600 hover:bg-green-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-xl shadow-green-200 transition-all active:scale-95 border-b-4 md:border-b-8 border-green-800"
+                          disabled={isTicketLocked(ticket)}
+                          className="flex-[1.5] bg-green-600 hover:bg-green-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-xl shadow-green-200 transition-all active:scale-95 border-b-4 md:border-b-8 border-green-800 disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                           <PackageCheck size={24} className="md:w-7 md:h-7" />
                           SELESAI
@@ -260,7 +358,8 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
                     {ticket.status === "pending" && (
                       <button
                         onClick={() => handleResume(ticket)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                        disabled={isTicketLocked(ticket)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-4 md:p-6 rounded-xl md:rounded-2xl font-black text-base md:text-xl uppercase italic tracking-wider flex items-center justify-center gap-2 md:gap-3 shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none"
                       >
                         <PlayCircle size={24} className="md:w-7 md:h-7" />
                         LANJUTKAN
@@ -270,7 +369,8 @@ const MechanicMode: React.FC<MechanicModeProps> = ({
 
                   <button
                     onClick={() => handleEdit(ticket)}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 p-3 md:p-4 rounded-lg md:rounded-xl font-black text-[10px] md:text-sm uppercase tracking-widest flex items-center justify-center gap-2 border-2 border-slate-200 transition-all active:scale-95"
+                    disabled={isTicketLocked(ticket)}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 p-3 md:p-4 rounded-lg md:rounded-xl font-black text-[10px] md:text-sm uppercase tracking-widest flex items-center justify-center gap-2 border-2 border-slate-200 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed"
                   >
                     <Wrench size={16} />+ TAMBAH / GANTI SERVIS
                   </button>

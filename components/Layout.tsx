@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, MonitorPlay, FileBarChart, Bike, Settings, Wrench, MapPin, Warehouse } from 'lucide-react';
+import { LayoutDashboard, MonitorPlay, FileBarChart, Bike, Settings, Wrench, MapPin, Warehouse, TrendingUp } from 'lucide-react';
 import { Branch } from '../types';
 
 interface LayoutProps {
@@ -50,6 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentBranch, onSwitchBranch
 
           <NavItem to="/display" icon={<MonitorPlay size={18} />} label="Layar TV" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
           <NavItem to="/reports" icon={<FileBarChart size={18} />} label="Laporan" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
+          <NavItem to="/performance" icon={<TrendingUp size={18} />} label="Performa" branchColorClass={isMK ? 'bg-blue-600' : 'bg-emerald-600'} />
           <div className="hidden md:block pt-4 mt-4 border-t border-slate-700">
              <div className="px-4 py-2">
                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-2">System</p>

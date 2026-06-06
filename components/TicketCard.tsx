@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Ticket } from '../types';
-import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, Clock } from 'lucide-react';
+import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, Clock, Link2 } from 'lucide-react';
 import { formatTime } from '../services/ticketService';
 
 interface TicketCardProps {
@@ -13,8 +13,10 @@ interface TicketCardProps {
   onCancel?: (ticket: Ticket) => void;
   onChangeMechanic?: (ticket: Ticket) => void;
   onEditServices?: (ticket: Ticket) => void;
+  onReconcile?: (ticket: Ticket) => void;
   compact?: boolean;
   customActions?: React.ReactNode;
+  locked?: boolean;
 }
 
 const TicketCard: React.FC<TicketCardProps> = ({ 
@@ -26,8 +28,10 @@ const TicketCard: React.FC<TicketCardProps> = ({
   onCancel,
   onChangeMechanic,
   onEditServices,
+  onReconcile,
   compact = false,
-  customActions
+  customActions,
+  locked = false
 }) => {
   const getStatusColor = () => {
     switch (ticket.status) {
@@ -60,7 +64,7 @@ const TicketCard: React.FC<TicketCardProps> = ({
   const isLongId = displayId.length > 6;
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full`}>
+    <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full ${locked ? 'opacity-65 bg-slate-50 border-slate-200/60 pointer-events-none select-none shadow-none hover:shadow-none' : ''}`}>
       
       {/* Header Row */}
       <div className="flex justify-between items-center gap-2 mb-1">
@@ -78,7 +82,12 @@ const TicketCard: React.FC<TicketCardProps> = ({
             }`}>
             {getStatusLabel(ticket.status)}
             </span>
-            {!ticket.dealposOrderId && (
+            {locked && (
+              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-500 border border-slate-300 uppercase tracking-widest text-[9px] flex items-center gap-1">
+                🔒 Terkunci
+              </span>
+            )}
+            {!locked && !ticket.dealposOrderId && (
               <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-tight whitespace-nowrap">
                 Manual Card
               </span>
@@ -87,6 +96,16 @@ const TicketCard: React.FC<TicketCardProps> = ({
         
         {/* Top Right Action Buttons - Compact Icons */}
         <div className="flex gap-1 shrink-0">
+            {!ticket.dealposOrderId && onReconcile && (
+                <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onReconcile(ticket); }}
+                    className="w-8 h-8 flex items-center justify-center bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-full border border-amber-200 transition-colors"
+                    title="Hubungkan ke DealPOS (Reconcile)"
+                >
+                    <Link2 size={16} />
+                </button>
+            )}
             {canEdit && onEditServices && (
                 <button 
                     type="button"
@@ -129,6 +148,47 @@ const TicketCard: React.FC<TicketCardProps> = ({
           </p>
         )}
       </div>
+
+      {/* Dynamic Flags Badges */}
+      {ticket.flags && Array.isArray(ticket.flags) && ticket.flags.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-1">
+          {ticket.flags.map((f, index) => {
+            const flag = f as string;
+            let label = flag;
+            let theme = "bg-rose-100 text-rose-800 border-rose-200";
+            
+            if (flag === "TELAT_UPDATE" || flag === "TELAT_UPDATE_ANTRIAN") {
+              label = "⚠️ TELAT UPDATE ANTRIAN";
+              theme = "bg-red-50 text-red-700 border-red-200 animate-pulse";
+            } else if (flag === "LATE_FOLLOW_UP" || flag === "TELAT_FOLLOW_UP") {
+              label = "⏳ LATE FOLLOW UP (>5 hari)";
+              theme = "bg-amber-50 text-amber-700 border-amber-200";
+            } else if (flag === "RESI_HILANG") {
+              label = "🏷️ RESI HILANG";
+              theme = "bg-purple-50 text-purple-700 border-purple-200";
+            } else if (flag === "TELAT_SELESAI") {
+              label = "⏱️ TELAT SELESAI";
+              theme = "bg-rose-50 text-rose-700 border-rose-200";
+            } else if (flag === "ANOMALI_DURASI_SERVICE") {
+              label = "🛑 DURASI ANOMALI (<5m)";
+              theme = "bg-red-100 text-red-800 border-red-300";
+            } else if (flag === "TIKET_TERLEWAT") {
+              label = "🌙 TIKET TERLEWAT";
+              theme = "bg-indigo-50 text-indigo-700 border-indigo-200";
+            }
+
+            return (
+              <span
+                key={index}
+                className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${theme}`}
+                title="Flag Operasional"
+              >
+                {label}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Services List */}
       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex-1">

@@ -7,6 +7,7 @@ import {
   Branch,
 } from "../types";
 import { formatTime } from "../services/ticketService";
+import { calculateTicketDuration } from "../components/DebriefModal";
 import {
   Search,
   Calendar,
@@ -29,12 +30,24 @@ interface ReportsProps {
   tickets: Ticket[];
   storageSlots?: StorageSlot[];
   currentBranch?: Branch;
+  isBengkelOpen?: boolean;
+  isOvertimeActive?: boolean;
+  isDebriefInProgress?: boolean;
+  debriefFrozenAt?: string | null;
+  overtimeTicketIds?: string[];
+  overtimeStoppedAt?: string | null;
 }
 
 const Reports: React.FC<ReportsProps> = ({
   tickets,
   storageSlots = [],
   currentBranch,
+  isBengkelOpen = true,
+  isOvertimeActive = false,
+  isDebriefInProgress = false,
+  debriefFrozenAt = null,
+  overtimeTicketIds = [],
+  overtimeStoppedAt = null,
 }) => {
   const [activeTab, setActiveTab] = useState<"service" | "storage">("service");
 
@@ -274,34 +287,15 @@ const Reports: React.FC<ReportsProps> = ({
   };
 
   const getTicketDurationString = (t: Ticket) => {
-    let startTimeStr = t.lastStatusChange;
-    if (!startTimeStr) {
-      if (t.status === "waiting") {
-        startTimeStr = t.timestamps.arrival;
-      } else if (t.status === "active") {
-        startTimeStr = t.timestamps.called || t.timestamps.arrival;
-      } else if (t.status === "ready") {
-        startTimeStr = t.timestamps.ready || t.timestamps.called || t.timestamps.arrival;
-      } else if (t.status === "taken") {
-        startTimeStr = t.timestamps.taken || t.timestamps.finished || t.timestamps.arrival;
-      } else if (t.status === "done") {
-        startTimeStr = t.timestamps.finished || t.timestamps.arrival;
-      } else {
-        startTimeStr = t.timestamps.arrival;
-      }
-    }
-
-    const startMs = startTimeStr ? new Date(startTimeStr).getTime() : new Date().getTime();
-    const diffMs = Math.max(0, new Date().getTime() - startMs);
-
-    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const days = Math.floor(totalHours / 24);
-    const hours = totalHours % 24;
-
-    const daysStr = String(days).padStart(2, "0");
-    const hoursStr = String(hours).padStart(2, "0");
-
-    return `${daysStr} Hari ${hoursStr} Jam`;
+    return calculateTicketDuration(
+      t,
+      isBengkelOpen,
+      isOvertimeActive,
+      isDebriefInProgress,
+      debriefFrozenAt,
+      overtimeTicketIds,
+      overtimeStoppedAt
+    );
   };
 
   const copyWA = () => {

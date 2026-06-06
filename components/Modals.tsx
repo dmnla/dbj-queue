@@ -17,6 +17,7 @@ import {
   Copy,
   UploadCloud,
   Trash2,
+  Link2,
 } from "lucide-react";
 import {
   Ticket,
@@ -24,6 +25,7 @@ import {
   StorageSlot,
   StorageLog,
   StorageRequest,
+  flag_type,
 } from "../types";
 import { formatTime, uploadFollowUpScreenshot } from "../services/ticketService";
 
@@ -269,6 +271,9 @@ export const CustomerSearchInput = ({
   onConnect,
   tickets = [],
   currentBranch = "mk",
+  ignoredDealposIds = [],
+  onIgnoreDealposId,
+  initialManualTicketId,
 }: any) => {
   const [dealposStep, setDealposStep] = useState<"fetch" | "select-order" | "configure-booking" | "manual">("fetch");
   const [connectionMode, setConnectionMode] = useState<"new" | "connect">("new");
@@ -278,6 +283,9 @@ export const CustomerSearchInput = ({
   const [isLoadingDealpos, setIsLoadingDealpos] = useState(false);
   const [dealposError, setDealposError] = useState<string | null>(null);
   const [dealposSearch, setDealposSearch] = useState("");
+  const [dealposCustomerName, setDealposCustomerName] = useState("");
+  const [dealposPhone, setDealposPhone] = useState("");
+  const [confirmIgnoreOrderId, setConfirmIgnoreOrderId] = useState<string | null>(null);
 
   const [bikesConfig, setBikesConfig] = useState<Array<{
     id: number;
@@ -294,6 +302,109 @@ export const CustomerSearchInput = ({
   const [unit, setUnit] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+
+  // States for dedicated reconciliation
+  const [recSearchQuery, setRecSearchQuery] = useState("");
+  const [recDropdownOpen, setRecDropdownOpen] = useState(false);
+  const [recInvoiceInput, setRecInvoiceInput] = useState("");
+  const [recInvoiceResult, setRecInvoiceResult] = useState<{
+    loading: boolean;
+    found: boolean;
+    error?: string;
+    OrderID?: string;
+    Number?: string;
+    CustomerName?: string;
+    Phone?: string;
+    Variants?: any[];
+    Created?: string | null;
+  } | null>(null);
+  const [recSelectedOrderID, setRecSelectedOrderID] = useState<string | null>(null);
+
+  const handleRecSearchInvoice = async () => {
+    if (!recInvoiceInput.trim()) return;
+    setRecInvoiceResult({ loading: true, found: false });
+    setRecSelectedOrderID(null);
+    try {
+      const cleanNum = recInvoiceInput.trim().replace(/^#+/, "");
+      const res = await fetch(`/api/dealpos?branch=${currentBranch}&invoiceNumber=${encodeURIComponent(cleanNum)}`);
+      if (!res.ok) {
+        throw new Error(`Invoice tidak ditemukan atau DealPOS error. (Status ${res.status})`);
+      }
+      const data = await res.json();
+      const num = data.Number;
+      const custName = data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
+      const phoneVal = data.Customer?.Phone || data.Customer?.Cell || "";
+      const orderId = data.InvoiceID || data.OrderID || data.invoiceId || data.orderId || "";
+      const createdTime = data.Created || data.Date || data.created || data.date || null;
+      
+      if (!orderId) {
+        throw new Error("DealPOS API tidak mengembalikan ID invoice/order.");
+      }
+
+      setRecInvoiceResult({
+        loading: false,
+        found: true,
+        OrderID: orderId,
+        Number: num,
+        CustomerName: custName,
+        Phone: phoneVal,
+        Variants: data.Variants || data.variants || [],
+        Created: createdTime
+      });
+      setRecSelectedOrderID(orderId);
+    } catch (e: any) {
+      setRecInvoiceResult({
+        loading: false,
+        found: false,
+        error: e.message || "Unknown error searching invoice"
+      });
+    }
+  };
+
+  const handleRecConnectSubmit = async () => {
+    if (!initialManualTicketId || !recSelectedOrderID || !onConnect) return;
+    try {
+      const custName = recInvoiceResult?.found ? recInvoiceResult.CustomerName : (dealposOrders.find(o => o.OrderID === recSelectedOrderID)?.Customer || reconcilingTicket?.customerName || "Unknown");
+      const phoneNum = recInvoiceResult?.found ? recInvoiceResult.Phone : (dealposOrders.find(o => o.OrderID === recSelectedOrderID)?.Phone || reconcilingTicket?.phone || "");
+      
+      // Determine SKU codes of the connected DealPOS order
+      const skuCodes: string[] = [];
+      const orderFromList = dealposOrders.find(o => o.OrderID === recSelectedOrderID);
+      const variants = recInvoiceResult?.found ? (recInvoiceResult.Variants || []) : (orderFromList?.Variants || orderFromList?.variants || []);
+      
+      variants.forEach((v: any) => {
+        const code = v.Code || v.ItemID || "";
+        if (code) skuCodes.push(code);
+      });
+
+      const flags: flag_type[] = [];
+      const createdStr = recInvoiceResult?.found ? recInvoiceResult.Created : orderFromList?.Created;
+      if (createdStr) {
+        const createdTimestamp = new Date(createdStr).getTime();
+        const diffMs = Date.now() - createdTimestamp;
+        const diffMinutes = diffMs / (1000 * 60);
+        if (diffMinutes > 15) {
+          flags.push(flag_type.TELAT_UPDATE_ANTRIAN);
+        }
+      }
+
+      onConnect(initialManualTicketId, recSelectedOrderID, custName, phoneNum, skuCodes, flags);
+      onClose();
+      // Reset rec states
+      setRecSearchQuery("");
+      setRecDropdownOpen(false);
+      setRecInvoiceInput("");
+      setRecInvoiceResult(null);
+      setRecSelectedOrderID(null);
+    } catch (err) {
+      console.error("Failed to connect", err);
+    }
+  };
+
+  const reconcilingTicket = useMemo(() => {
+    if (!initialManualTicketId) return null;
+    return (tickets || []).find((t: any) => t.id === initialManualTicketId);
+  }, [tickets, initialManualTicketId]);
 
   const serviceNames = useMemo(
     () => services.map((s: any) => s.name),
@@ -327,6 +438,7 @@ export const CustomerSearchInput = ({
           groups[orderId] = {
             OrderID: orderId,
             Customer: entry.Customer || "UNKNOWN",
+            Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
             ParkLabel: entry.ParkLabel || "",
             Created: entry.Created || "",
             Number: entry.Number || "",
@@ -355,14 +467,17 @@ export const CustomerSearchInput = ({
         });
       });
 
-      // Filter out OrderIDs that are already in active/waiting tickets state
+      // Filter out OrderIDs that are already in active/waiting tickets state or ignored
       const importedOrderIds = new Set(
         (tickets || [])
           .map((t: any) => t.dealposOrderId)
           .filter((id: any) => !!id)
       );
+      const ignoredIdsSet = new Set(ignoredDealposIds || []);
 
-      const finalGroupedOrders = eligibleGroups.filter((g: any) => !importedOrderIds.has(g.OrderID));
+      const finalGroupedOrders = eligibleGroups.filter(
+        (g: any) => !importedOrderIds.has(g.OrderID) && !ignoredIdsSet.has(g.OrderID)
+      );
 
       setDealposOrders(finalGroupedOrders);
       setDealposStep("select-order");
@@ -392,11 +507,17 @@ export const CustomerSearchInput = ({
       setBikesConfig([]);
       setDealposSearch("");
       setDealposError(null);
-      setConnectionMode("new");
-      setSelectedManualTicketId("");
+      setConfirmIgnoreOrderId(null);
+      if (initialManualTicketId) {
+        setConnectionMode("connect");
+        setSelectedManualTicketId(initialManualTicketId);
+      } else {
+        setConnectionMode("new");
+        setSelectedManualTicketId("");
+      }
       fetchDealposOrders();
     }
-  }, [isOpen]);
+  }, [isOpen, initialManualTicketId]);
 
   const handleSelectCustomer = (c: Customer) => {
     setSelectedCustomer(c);
@@ -408,8 +529,8 @@ export const CustomerSearchInput = ({
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && selectedServices.length > 0 && unit) {
-      onAdd(name, phone, unit, selectedServices, notes, selectedCustomer?.id);
+    if (name && phone.trim() && selectedServices.length > 0 && unit) {
+      onAdd(name, phone.trim(), unit, selectedServices, notes, selectedCustomer?.id);
       onClose();
       setName("");
       setPhone("");
@@ -422,6 +543,8 @@ export const CustomerSearchInput = ({
 
   const handleSelectOrder = (order: any) => {
     setSelectedDealposOrder(order);
+    setDealposCustomerName(order.Customer || "Unknown");
+    setDealposPhone(order.Phone || order.Contact || "");
 
     const dbjsServices = order.Variants.filter((v: any) => {
       const code = v.Code || "";
@@ -429,17 +552,29 @@ export const CustomerSearchInput = ({
       return code.startsWith("DBJS") || itemId.startsWith("DBJS");
     });
 
-    // Initialize with 1 bike
-    setBikesConfig([
-      {
-        id: 1,
+    let initialBikesCount = 1;
+    let totalQty = 0;
+    dbjsServices.forEach((v: any) => {
+      const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
+      totalQty += qty;
+    });
+
+    if (totalQty > 0) {
+      initialBikesCount = totalQty;
+    }
+
+    const initialBikes = [];
+    for (let i = 1; i <= initialBikesCount; i++) {
+      initialBikes.push({
+        id: i,
         unit: "",
         phone: "",
         servicesSelected: dbjsServices.map((v: any) => v.Name),
-        notes: order.Note || dbjsServices.map((v: any) => v.Note).filter((n: any) => !!n).join("\n") || "",
-      },
-    ]);
+        notes: "",
+      });
+    }
 
+    setBikesConfig(initialBikes);
     setDealposStep("configure-booking");
   };
 
@@ -471,22 +606,65 @@ export const CustomerSearchInput = ({
 
   const handleConfirmDealposBooking = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDealposOrder) return;
+    if (!selectedDealposOrder || !dealposPhone.trim()) return;
 
     if (connectionMode === "connect") {
       if (selectedManualTicketId && onConnect) {
-        onConnect(selectedManualTicketId, selectedDealposOrder.OrderID);
+        // Collect all SKU codes from selectedDealposOrder
+        const skuCodes: string[] = [];
+        if (selectedDealposOrder.Variants) {
+          selectedDealposOrder.Variants.forEach((v: any) => {
+            const code = v.Code || v.ItemID || "";
+            if (code) skuCodes.push(code);
+          });
+        }
+
+        const flags: flag_type[] = [];
+        if (selectedDealposOrder.Created) {
+          const createdTimestamp = new Date(selectedDealposOrder.Created).getTime();
+          const diffMs = Date.now() - createdTimestamp;
+          const diffMinutes = diffMs / (1000 * 60);
+          if (diffMinutes > 15) {
+            flags.push(flag_type.TELAT_UPDATE_ANTRIAN);
+          }
+        }
+
+        onConnect(selectedManualTicketId, selectedDealposOrder.OrderID, dealposCustomerName, dealposPhone, skuCodes, flags);
       }
     } else {
+      const flags: flag_type[] = [];
+      if (selectedDealposOrder.Created) {
+        const createdTimestamp = new Date(selectedDealposOrder.Created).getTime();
+        const diffMs = Date.now() - createdTimestamp;
+        const diffMinutes = diffMs / (1000 * 60);
+        if (diffMinutes > 15) {
+          flags.push(flag_type.TELAT_UPDATE_ANTRIAN);
+        }
+      }
+
       for (const bike of bikesConfig) {
+        // Match each selected service name to find its SKU code
+        const skuCodes: string[] = [];
+        if (bike.servicesSelected && selectedDealposOrder.Variants) {
+          bike.servicesSelected.forEach((sName: string) => {
+            const matched = selectedDealposOrder.Variants.find((v: any) => v.Name === sName);
+            if (matched) {
+              const code = matched.Code || matched.ItemID || "";
+              if (code) skuCodes.push(code);
+            }
+          });
+        }
+
         onAdd(
-          selectedDealposOrder.Customer || "Unknown",
-          bike.phone,
+          dealposCustomerName || "Unknown",
+          dealposPhone,
           bike.unit,
           bike.servicesSelected,
           bike.notes,
           undefined,
-          selectedDealposOrder.OrderID
+          selectedDealposOrder.OrderID,
+          flags,
+          skuCodes
         );
       }
     }
@@ -497,6 +675,8 @@ export const CustomerSearchInput = ({
 
   const filteredDealposOrders = dealposOrders.filter((order: any) => {
     const query = dealposSearch.toLowerCase();
+    const ignoredIdsSet = new Set(ignoredDealposIds || []);
+    if (ignoredIdsSet.has(order.OrderID)) return false;
     return (
       (order.Customer || "").toLowerCase().includes(query) ||
       (order.ParkLabel || "").toLowerCase().includes(query) ||
@@ -506,11 +686,16 @@ export const CustomerSearchInput = ({
 
   const dbjsVariantsCount = useMemo(() => {
     if (!selectedDealposOrder) return 0;
-    return selectedDealposOrder.Variants.filter((v: any) => {
+    let count = 0;
+    selectedDealposOrder.Variants.forEach((v: any) => {
       const code = v.Code || "";
       const itemId = v.ItemID || "";
-      return code.startsWith("DBJS") || itemId.startsWith("DBJS");
-    }).length;
+      if (code.startsWith("DBJS") || itemId.startsWith("DBJS")) {
+        const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
+        count += qty;
+      }
+    });
+    return count;
   }, [selectedDealposOrder]);
 
   const activeBranchLabel = currentBranch === "pik" ? "PIK 2" : "Muara Karang";
@@ -531,7 +716,9 @@ export const CustomerSearchInput = ({
   return (
     <ModalBase 
       title={
-        dealposStep === "manual" 
+        reconcilingTicket
+          ? `Hubungkan ke DEALPOS (Rekonsiliasi)`
+          : dealposStep === "manual" 
           ? "Buat Tiket Baru (Manual)" 
           : dealposStep === "configure-booking"
           ? "Konfigurasi Antrian"
@@ -539,8 +726,182 @@ export const CustomerSearchInput = ({
       } 
       isOpen={isOpen} 
       onClose={onClose}
-      maxWidth={dealposStep === "configure-booking" ? "max-w-2xl" : "max-w-lg"}
+      maxWidth={reconcilingTicket ? "max-w-md" : dealposStep === "configure-booking" ? "max-w-2xl" : "max-w-lg"}
     >
+      {reconcilingTicket ? (
+        <div className="space-y-5">
+          {/* Header Ticket Summary Card */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black bg-slate-200 text-slate-800 px-2 py-0.5 rounded uppercase font-mono">
+                #{reconcilingTicket.ticketNumber || reconcilingTicket.id.slice(-4)}
+              </span>
+              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
+                {reconcilingTicket.customerName}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-bold mt-1">
+              Model: {reconcilingTicket.unitSepeda} — Servis: {reconcilingTicket.serviceTypes.join(", ")}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* OPTION A: Search & Dropdown for Open Parked Orders */}
+            <div className="space-y-1.5 relative">
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi A: Cari & Pilih Tagihan Terbuka (Parked Order)</span>
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  placeholder="Ketik nama / no. order atau klik dropdown..."
+                  className="w-full p-2.5 pr-14 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-bold text-slate-800 placeholder-slate-400"
+                  value={recSearchQuery}
+                  onChange={(e) => {
+                    setRecSearchQuery(e.target.value);
+                    setRecDropdownOpen(true);
+                  }}
+                  onFocus={() => {
+                    setRecDropdownOpen(true);
+                    if (dealposOrders.length === 0) {
+                      fetchDealposOrders();
+                    }
+                  }}
+                />
+                <div className="absolute right-2 flex items-center gap-1.5 z-10">
+                  {recSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecSearchQuery("");
+                        setRecSelectedOrderID(null);
+                        setRecDropdownOpen(true);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecDropdownOpen(!recDropdownOpen);
+                      if (!recDropdownOpen && dealposOrders.length === 0) {
+                        fetchDealposOrders();
+                      }
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Suggestions dropdown list */}
+              {recDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setRecDropdownOpen(false)}
+                  />
+                  <div className="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-lg divide-y divide-slate-100 mt-1">
+                    {(() => {
+                      const isPreVal = recSearchQuery.startsWith("#");
+                      const q = isPreVal ? "" : recSearchQuery.toLowerCase().trim();
+                      const matches = dealposOrders.filter(o => 
+                        !q ||
+                        (o.Number || "").toLowerCase().includes(q) ||
+                        (o.Customer || "").toLowerCase().includes(q) ||
+                        (o.ParkLabel || "").toLowerCase().includes(q)
+                      );
+                      
+                      if (matches.length === 0) {
+                        return <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">Tidak ada kecocokan</div>;
+                      }
+                      return matches.map(o => (
+                        <button
+                          key={o.OrderID}
+                          type="button"
+                          onClick={() => {
+                            setRecSelectedOrderID(o.OrderID);
+                            setRecSearchQuery(`#${o.Number} - ${o.Customer || o.ParkLabel || "No Name"}`);
+                            setRecDropdownOpen(false);
+                            setRecInvoiceResult(null); // Clear Option B result
+                          }}
+                          className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
+                        >
+                          <span>#{o.Number} - {o.Customer || o.ParkLabel || "No Name"}</span>
+                          <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* OPTION B: Search Invoice backup */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi B: Cari No. Invoice (Final/Paid Backup)</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="No. Invoice (misal: 26.05.00347)..."
+                  className="flex-1 p-2.5 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-bold text-slate-800 placeholder-slate-400"
+                  value={recInvoiceInput}
+                  onChange={(e) => setRecInvoiceInput(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={handleRecSearchInvoice}
+                  disabled={!recInvoiceInput.trim() || recInvoiceResult?.loading}
+                  className="px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center shrink-0 min-w-[70px]"
+                >
+                  {recInvoiceResult?.loading ? "..." : "Cari"}
+                </button>
+              </div>
+
+              {recInvoiceResult && (
+                <div className="text-[11px] font-bold p-3 rounded-xl border mt-1">
+                  {recInvoiceResult.loading && (
+                    <div className="text-slate-500 animate-pulse uppercase">🔍 SEDANG MENCARI INVOICE...</div>
+                  )}
+                  {recInvoiceResult.error && (
+                    <div className="text-rose-600 uppercase">❌ {recInvoiceResult.error}</div>
+                  )}
+                  {recInvoiceResult.found && (
+                    <div className="text-emerald-600 uppercase flex flex-col gap-0.5">
+                      <span className="font-black">✅ INVOICE DITEMUKAN:</span>
+                      <span className="text-slate-800 font-bold font-mono">No: #{recInvoiceResult.Number}</span>
+                      <span className="text-slate-800 font-bold">Nama: {recInvoiceResult.CustomerName?.toUpperCase()}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action button container */}
+          <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
+            >
+              Batal
+            </button>
+            {recSelectedOrderID && (
+              <button
+                type="button"
+                onClick={handleRecConnectSubmit}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5"
+              >
+                <Check size={14} /> Hubungkan Kartu
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+
       {dealposStep === "fetch" && (
         <div className="flex flex-col items-center justify-center py-12 px-6 text-center space-y-4">
           <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
@@ -643,22 +1004,69 @@ export const CustomerSearchInput = ({
                           </p>
                         )}
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {dbjsList.map((v: any, idx: number) => (
-                            <span key={idx} className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold">
-                              {v.Name}
-                            </span>
-                          ))}
+                          {dbjsList.map((v: any, idx: number) => {
+                            const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
+                            const qtyDisplay = qty > 1 ? ` (x${qty})` : "";
+                            return (
+                              <span key={idx} className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold">
+                                {v.Name}{qtyDisplay}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
-                      <button 
-                        className="self-end sm:self-center bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-4 py-2 rounded-lg tracking-wider active:scale-95 transition-all"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectOrder(order);
-                        }}
-                      >
-                        Pilih
-                      </button>
+                      <div className="flex gap-2 self-end sm:self-center">
+                        {confirmIgnoreOrderId === order.OrderID ? (
+                          <div className="bg-red-50 border border-red-200 p-2 rounded-xl flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold text-red-700 uppercase tracking-tight">Yakin sembunyikan order ini?</span>
+                            <button
+                              type="button"
+                              className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onIgnoreDealposId) {
+                                  onIgnoreDealposId(order.OrderID);
+                                }
+                                setDealposOrders(prev => prev.filter(o => o.OrderID !== order.OrderID));
+                                setConfirmIgnoreOrderId(null);
+                              }}
+                            >
+                              Ya
+                            </button>
+                            <button
+                              type="button"
+                              className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmIgnoreOrderId(null);
+                              }}
+                            >
+                              Batal
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button 
+                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-black uppercase px-3 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmIgnoreOrderId(order.OrderID);
+                              }}
+                            >
+                              Bukan Service
+                            </button>
+                            <button 
+                              className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-4 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectOrder(order);
+                              }}
+                            >
+                              Pilih
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -670,17 +1078,46 @@ export const CustomerSearchInput = ({
 
       {dealposStep === "configure-booking" && selectedDealposOrder && (
         <form onSubmit={handleConfirmDealposBooking} className="space-y-4 overflow-hidden max-h-[80vh] flex flex-col">
-          <div className="bg-slate-50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0">
-            <div>
-              <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Pesanan Terpilih</p>
-              <h4 className="text-base font-black text-slate-800 uppercase">{selectedDealposOrder.Customer}</h4>
-              <p className="text-xs text-slate-500 font-bold">#{selectedDealposOrder.Number} - {selectedDealposOrder.ParkLabel}</p>
+          <div className="bg-slate-50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 shrink-0">
+            <div className="flex-1 space-y-3">
+              <div>
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Info Pelanggan & Pesanan</p>
+                <p className="text-xs text-slate-500 font-bold mb-2 cursor-default">#{selectedDealposOrder.Number} - {selectedDealposOrder.ParkLabel}</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                      Nama Pelanggan
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                      value={dealposCustomerName}
+                      onChange={(e) => setDealposCustomerName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                      Nomor Telepon <span className="text-red-500 font-black">*</span>
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Contoh: 0812345678"
+                      className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                      value={dealposPhone}
+                      onChange={(e) => setDealposPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             
             {connectionMode === "new" && dbjsVariantsCount > 1 && (
-              <div className="space-y-1 shrink-0">
+              <div className="space-y-1 shrink-0 mt-1 sm:mt-0">
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                  Berapa sepeda yang diservis?
+                  Jumlah Sepeda
                 </label>
                 <select 
                   className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none cursor-pointer"
@@ -743,39 +1180,23 @@ export const CustomerSearchInput = ({
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
-                          Unit Sepeda (Wajib)
-                        </label>
-                        <input
-                          required={connectionMode === "new"}
-                          type="text"
-                          placeholder="Contoh: Brompton M6L / Moots Vamoots"
-                          className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-bold placeholder:text-slate-400 placeholder:font-normal"
-                          value={bike.unit}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setBikesConfig(prev => prev.map(b => b.id === bike.id ? { ...b, unit: val } : b));
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
-                          Nomor Telepon
-                        </label>
-                        <input
-                          type="tel"
-                          placeholder="Contoh: 0812345678"
-                          className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-bold placeholder:text-slate-400 placeholder:font-normal"
-                          value={bike.phone}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setBikesConfig(prev => prev.map(b => b.id === bike.id ? { ...b, phone: val } : b));
-                          }}
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
+                        Unit Sepeda (Wajib)
+                      </label>
+                      <input
+                        required={connectionMode === "new"}
+                        type="text"
+                        placeholder="Contoh: Brompton M6L / Moots Vamoots"
+                        className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-bold placeholder:text-slate-400 placeholder:font-normal"
+                        value={bike.unit}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBikesConfig(prev => prev.map(b => b.id === bike.id ? { ...b, unit: val } : b));
+                        }}
+                      />
                     </div>
+
 
                     <div>
                       <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
@@ -852,7 +1273,17 @@ export const CustomerSearchInput = ({
                       required={connectionMode === "connect"}
                       className="w-full text-xs font-bold text-slate-800 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-slate-300 transition-all cursor-pointer"
                       value={selectedManualTicketId}
-                      onChange={(e) => setSelectedManualTicketId(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedManualTicketId(val);
+                        if (val) {
+                          const t = activeManualTickets.find((ticket: any) => ticket.id === val);
+                          if (t) {
+                            setDealposCustomerName(t.customerName || selectedDealposOrder?.Customer || "Unknown");
+                            setDealposPhone(t.phone || selectedDealposOrder?.Phone || "");
+                          }
+                        }
+                      }}
                     >
                       <option value="">-- Hubungkan ke Kartu Antrian Manual --</option>
                       {activeManualTickets.map((t: any) => {
@@ -865,6 +1296,36 @@ export const CustomerSearchInput = ({
                       })}
                     </select>
                   </div>
+
+                  {selectedManualTicketId && (
+                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                      <div>
+                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                          Nama Pelanggan (Ubah Jika Diperlukan)
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="Masukkan nama pelanggan..."
+                          value={dealposCustomerName}
+                          onChange={(e) => setDealposCustomerName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                          Nomor Telepon (Wajib) <span className="text-red-500 font-black">*</span>
+                        </label>
+                        <input
+                          required
+                          type="text"
+                          className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="Masukkan nomor telepon..."
+                          value={dealposPhone}
+                          onChange={(e) => setDealposPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -881,7 +1342,7 @@ export const CustomerSearchInput = ({
             {connectionMode === "connect" ? (
               <button
                 type="submit"
-                disabled={activeManualTickets.length === 0 || !selectedManualTicketId}
+                disabled={activeManualTickets.length === 0 || !selectedManualTicketId || !dealposPhone.trim()}
                 className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
               >
                 Hubungkan Pesanan DEALPOS
@@ -889,7 +1350,7 @@ export const CustomerSearchInput = ({
             ) : (
               <button
                 type="submit"
-                disabled={bikesConfig.some(b => !b.unit.trim() || b.servicesSelected.length === 0)}
+                disabled={!dealposPhone.trim() || bikesConfig.some(b => !b.unit.trim() || b.servicesSelected.length === 0)}
                 className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
               >
                 Simpan & Daftarkan #{bikesConfig.length} Antrian
@@ -929,14 +1390,15 @@ export const CustomerSearchInput = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-                Nomor Telepon
+                Nomor Telepon <span className="text-red-500 font-black">*</span>
               </label>
               <input
-                type="tel"
+                required
+                type="text"
                 className={inputClass}
                 placeholder="08xxxx"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
               />
             </div>
             <div>
@@ -1017,6 +1479,7 @@ export const CustomerSearchInput = ({
           </div>
         </form>
       )}
+      </>)}
     </ModalBase>
   );
 };
@@ -1515,11 +1978,13 @@ export const StorageCheckInModal = ({
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              Telepon
+              Telepon <span className="text-red-500 font-black">*</span>
             </label>
             <input
+              required
+              type="text"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
               className={inputClass}
             />
           </div>
@@ -1814,11 +2279,13 @@ export const EditCustomerModal = ({
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-            Telepon
+            Telepon <span className="text-red-500 font-black">*</span>
           </label>
           <input
+            required
+            type="text"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
             className={inputClass}
           />
         </div>
@@ -2050,12 +2517,14 @@ export const StorageApprovalModal = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                Telepon
+                Telepon <span className="text-red-500 font-black">*</span>
               </label>
               <input
+                required
+                type="text"
                 className={inputClass}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
               />
             </div>
             <div>

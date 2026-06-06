@@ -27,6 +27,7 @@ import {
   StorageSlot,
   StorageLog,
   StorageRequest,
+  flag_type,
 } from "../types";
 import { DEFAULT_MECHANICS, DEFAULT_SERVICES } from "../constants";
 
@@ -240,9 +241,14 @@ export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
   return onSnapshot(
     q,
     (snapshot) => {
-      const tickets = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() }) as Ticket,
-      );
+      const tickets = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        let followUpResult = data.followUpResult;
+        if (followUpResult === "Berhasil") {
+          followUpResult = "Selesai";
+        }
+        return { id: doc.id, ...data, followUpResult } as Ticket;
+      });
       tickets.sort(
         (a, b) =>
           new Date(b.timestamps.arrival).getTime() -
@@ -376,6 +382,8 @@ export const addTicketToCloud = async (
   notes: string,
   customerId?: string,
   dealposOrderId?: string,
+  flags?: flag_type[],
+  serviceSkuCodes?: string[],
 ) => {
   if (!db) return;
   const uniqueDocId = `T-${Date.now()}`;
@@ -462,12 +470,77 @@ export const addTicketToCloud = async (
           finished: null,
         },
         dealposOrderId: dealposOrderId || null,
+        serviceSkuCodes: serviceSkuCodes || null,
+        flags: flags || null,
+        flag_types: flags || null,
       });
     });
   } catch (e) {
     console.error("Transaction failed: ", e);
     alert("Gagal membuat tiket. Cek koneksi.");
   }
+};
+
+export const isTicketExcludedFromFollowUp = (ticket: Ticket): boolean => {
+  if (!ticket) return false;
+
+  // 1. Check client name (case-insensitive)
+  const nameLower = (ticket.customerName || "").toLowerCase();
+  if (
+    nameLower.includes("bengkel") ||
+    nameLower.includes("daniel dewata") ||
+    nameLower.includes("ko daniel")
+  ) {
+    return true;
+  }
+
+  // 2. Check SKU codes
+  if (ticket.serviceSkuCodes && ticket.serviceSkuCodes.length > 0) {
+    const excludedSkus = new Set([
+      "DBJSR069",
+      "DBJS75",
+      "DBJS72",
+      "DBJS70",
+      "DBJS71",
+      "DBJSR067",
+      "DBJSR017",
+      "DBJS25",
+      "DBJSR012",
+      "DBJSR075",
+      "DBJSR076",
+      "DBJSR079",
+      "DBJSR078",
+      "DBJSR011",
+      "DBJSR025",
+      "DBJSR032",
+      "DBJSR009",
+      "DBJSR029",
+      "DBJSR008",
+      "DBJSR006",
+      "DBJSR007",
+      "DBJS4",
+      "DBJSR073",
+      "DBJSR016",
+      "DBJSR072",
+      "DBJSR068",
+      "DBJS21",
+      "DBJSR037",
+      "DBJSR013",
+      "DBJSR035"
+    ]);
+
+    // Ticket must ONLY contain excluded SKU codes to be excluded
+    const hasOnlyExcludedSkus = ticket.serviceSkuCodes.every((sku) => {
+      const cleanSku = (sku || "").trim().toUpperCase();
+      return excludedSkus.has(cleanSku);
+    });
+
+    if (hasOnlyExcludedSkus) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 export const updateTicketStatusInCloud = async (
@@ -481,18 +554,45 @@ export const updateTicketStatusInCloud = async (
   followUpPhotoUrl?: string
 ) => {
   if (!db) return;
-  const updates: any = { status };
-  if (status !== currentTicket.status) {
+
+  let finalStatus = status;
+  if (status === "taken") {
+    // If ticket is excluded from follow up, elevate directly to "done" (SELESAI)
+    if (isTicketExcludedFromFollowUp(currentTicket)) {
+      finalStatus = "done";
+    }
+  }
+
+  const updates: any = { status: finalStatus };
+  if (finalStatus !== currentTicket.status) {
     updates.lastStatusChange = new Date().toISOString();
   }
-  if (status === "active" && currentTicket.status === "waiting")
+  if (finalStatus === "active" && currentTicket.status === "waiting")
     updates["timestamps.called"] = new Date().toISOString();
-  if (status === "ready")
+  if (finalStatus === "ready") {
     updates["timestamps.ready"] = new Date().toISOString();
-  if (status === "taken")
+    if (currentTicket.status === "active" && currentTicket.timestamps.called) {
+      const startMs = new Date(currentTicket.timestamps.called).getTime();
+      const diffMs = new Date().getTime() - startMs;
+      if (diffMs < 5 * 60 * 1000) {
+        // Less than 5 minutes
+        const existingFlags = currentTicket.flags || [];
+        if (!existingFlags.includes("ANOMALI_DURASI_SERVICE" as any)) {
+          updates.flags = [...existingFlags, "ANOMALI_DURASI_SERVICE" as any];
+        }
+      }
+    }
+  }
+  if (finalStatus === "taken")
     updates["timestamps.taken"] = new Date().toISOString();
-  if (status === "done")
+  if (finalStatus === "done") {
     updates["timestamps.finished"] = new Date().toISOString();
+    // If we skipped directly from ready to done because of exclusion,
+    // let's record the timestamps.taken as well
+    if (!currentTicket.timestamps.taken) {
+      updates["timestamps.taken"] = new Date().toISOString();
+    }
+  }
   if (mechanic !== undefined) updates.mechanic = mechanic;
   if (reason !== undefined) updates.cancellationReason = reason;
   if (followUpResult !== undefined) updates.followUpResult = followUpResult;
@@ -525,9 +625,39 @@ export const updateTicketServicesInCloud = async (
 export const connectTicketToDealposOrderIdInCloud = async (
   id: string,
   dealposOrderId: string,
+  customerName?: string,
+  phone?: string,
+  serviceSkuCodes?: string[],
+  flags?: flag_type[],
 ) => {
   if (!db) return;
-  await updateDoc(doc(db, "tickets", id), { dealposOrderId });
+  const docRef = doc(db, "tickets", id);
+  const updates: any = { dealposOrderId };
+  if (customerName) updates.customerName = customerName;
+  if (phone) updates.phone = phone;
+  if (serviceSkuCodes) updates.serviceSkuCodes = serviceSkuCodes;
+
+  if (flags && flags.length > 0) {
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const existingFlags = data.flags || data.flag_types || [];
+        const mergedFlags = Array.from(new Set([...existingFlags, ...flags]));
+        updates.flags = mergedFlags;
+        updates.flag_types = mergedFlags;
+      } else {
+        updates.flags = flags;
+        updates.flag_types = flags;
+      }
+    } catch (err) {
+      console.error("Error merging flags during reconnect:", err);
+      updates.flags = flags;
+      updates.flag_types = flags;
+    }
+  }
+
+  await updateDoc(docRef, updates);
 };
 
 export const debugFastForwardTaken = async (id: string) => {
@@ -1108,3 +1238,114 @@ export const createStorageRequest = async (
   };
   await setDoc(doc(db, "storageRequests", req.id), req);
 };
+
+export const subscribeToIgnoredDealpos = (onUpdate: (orderIds: string[]) => void) => {
+  if (!db) return () => {};
+  const q = query(collection(db, "ignoredDealpos"));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const ids = snapshot.docs.map((doc) => doc.id);
+      onUpdate(ids);
+    },
+    (error) => console.error("Ignored Dealpos subscription error:", error),
+  );
+};
+
+export const ignoreDealposOrderIdInCloud = async (orderId: string) => {
+  if (!db) return;
+  await setDoc(doc(db, "ignoredDealpos", orderId), {
+    ignored: true,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+export const toggleBengkelOpenInCloud = async (branch: Branch, isOpen: boolean) => {
+  if (!db) return;
+  const configRef = doc(db, "settings", `config_${branch}`);
+  await updateDoc(configRef, { isBengkelOpen: isOpen }).catch(async () => {
+    await setDoc(configRef, { isBengkelOpen: isOpen, ticketCounter: 0, isOvertimeActive: false });
+  });
+};
+
+export const toggleOvertimeInCloud = async (branch: Branch, isOvertime: boolean) => {
+  if (!db) return;
+  const configRef = doc(db, "settings", `config_${branch}`);
+  await updateDoc(configRef, { isOvertimeActive: isOvertime }).catch(async () => {
+    await setDoc(configRef, { isOvertimeActive: isOvertime, ticketCounter: 0, isBengkelOpen: true });
+  });
+};
+
+export const updateOperationalConfigInCloud = async (
+  branch: Branch,
+  updates: {
+    isBengkelOpen?: boolean;
+    isOvertimeActive?: boolean;
+    isDebriefInProgress?: boolean;
+    debriefFrozenAt?: string | null;
+    overtimeTicketIds?: string[];
+    overtimeStoppedAt?: string | null;
+  }
+) => {
+  if (!db) return;
+  const configRef = doc(db, "settings", `config_${branch}`);
+  await updateDoc(configRef, updates as any).catch(async () => {
+    await setDoc(configRef, {
+      ticketCounter: 0,
+      isBengkelOpen: true,
+      isOvertimeActive: false,
+      isDebriefInProgress: false,
+      debriefFrozenAt: null,
+      overtimeTicketIds: [],
+      ...updates,
+    });
+  });
+};
+
+export const updateTicketInCloud = async (id: string, updates: any) => {
+  if (!db) return;
+  const ticketRef = doc(db, "tickets", id);
+  await updateDoc(ticketRef, updates);
+};
+
+export const subscribeToOperationalStatus = (
+  branch: Branch,
+  onUpdate: (data: {
+    isBengkelOpen: boolean;
+    isOvertimeActive: boolean;
+    isDebriefInProgress?: boolean;
+    debriefFrozenAt?: string | null;
+    overtimeTicketIds?: string[];
+    overtimeStoppedAt?: string | null;
+  }) => void
+) => {
+  if (!db) return () => {};
+  const configRef = doc(db, "settings", `config_${branch}`);
+  return onSnapshot(
+    configRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        onUpdate({
+          isBengkelOpen: data.isBengkelOpen !== undefined ? data.isBengkelOpen : true,
+          isOvertimeActive: data.isOvertimeActive !== undefined ? data.isOvertimeActive : false,
+          isDebriefInProgress: data.isDebriefInProgress !== undefined ? data.isDebriefInProgress : false,
+          debriefFrozenAt: data.debriefFrozenAt !== undefined ? data.debriefFrozenAt : null,
+          overtimeTicketIds: data.overtimeTicketIds !== undefined ? data.overtimeTicketIds : [],
+          overtimeStoppedAt: data.overtimeStoppedAt !== undefined ? data.overtimeStoppedAt : null,
+        });
+      } else {
+        onUpdate({
+          isBengkelOpen: true,
+          isOvertimeActive: false,
+          isDebriefInProgress: false,
+          debriefFrozenAt: null,
+          overtimeTicketIds: [],
+          overtimeStoppedAt: null,
+        });
+      }
+    },
+    (error) => console.error("Operational status subscription error:", error)
+  );
+};
+

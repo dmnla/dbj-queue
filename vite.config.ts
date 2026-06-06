@@ -2,6 +2,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const sanitizeHtmlPlugin = (): Plugin => ({
   name: 'sanitize-html',
   enforce: 'pre' as const, // 'as const' fixes the literal type mismatch error
@@ -20,6 +22,7 @@ const dealposProxyPlugin = (): Plugin => ({
         try {
           const urlObj = new URL(req.url, 'http://localhost');
           const branch = urlObj.searchParams.get('branch') || 'mk';
+          const invoiceNumber = urlObj.searchParams.get('invoiceNumber') || '';
           const outletId = branch === 'pik' 
             ? '3e6535c2-440b-4d47-aab0-9c6687617c4b' 
             : '410ba2b7-8eff-4759-b5f1-cf47b33ef1cc';
@@ -76,9 +79,18 @@ const dealposProxyPlugin = (): Plugin => ({
             return;
           }
 
-          // 2. Fetch Parked Orders
-          const ordersRes = await fetch(
-            `https://dailybike.dealpos.net/api/v3/ParkedOrderDisplay/Default?PageNumber=1&PageSize=50&OutletID=${outletId}`,
+          // 2. Determine URL based on whether an invoice number is requested
+          let targetUrl = "";
+          if (invoiceNumber) {
+            const cleanInvoiceNumber = String(invoiceNumber).trim().replace(/^#+/, "");
+            targetUrl = `https://dailybike.dealpos.net/api/v3/Invoice/Detail?Number=${encodeURIComponent(cleanInvoiceNumber)}&OutletID=${outletId}`;
+          } else {
+            targetUrl = "https://dailybike.dealpos.net/api/v3/ParkedOrderDisplay/Default?PageNumber=1&PageSize=1000&OutletID={outletId}&OrderType=Parked&Sort=Desc&MaxHours=2160"
+              .replace("{outletId}", outletId);
+          }
+
+          const fetchRes = await fetch(
+            targetUrl,
             {
               headers: {
                 "Authorization": `Bearer ${token}`,
@@ -87,23 +99,24 @@ const dealposProxyPlugin = (): Plugin => ({
             }
           );
 
-          if (!ordersRes.ok) {
-            const errText = await ordersRes.text();
-            res.statusCode = ordersRes.status;
+          if (!fetchRes.ok) {
+            const errText = await fetchRes.text();
+            res.statusCode = fetchRes.status;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
-              error: `Dealpos fetch orders failed with status ${ordersRes.status}`,
+              error: `Dealpos fetch failed with status ${fetchRes.status}`,
               details: errText
             }));
             return;
           }
 
-          const ordersData = await ordersRes.json();
+          const responseData = await fetchRes.json();
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(ordersData));
+          res.end(JSON.stringify(responseData));
 
         } catch (error: any) {
+          console.error("[Vite Proxy Error]:", error);
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({

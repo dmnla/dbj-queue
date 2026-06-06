@@ -1,5 +1,7 @@
 import { IncomingMessage, ServerResponse } from "http";
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 export default async function handler(req: any, res: any) {
   // CORS Headers
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -58,9 +60,19 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. Fetch Parked Orders
-    const ordersRes = await fetch(
-      `https://dailybike.dealpos.net/api/v3/ParkedOrderDisplay/Default?PageNumber=1&PageSize=50&OutletID=${outletId}`,
+    // 2. Determine URL based on whether an invoice number is requested
+    const invoiceNumber = req.query?.invoiceNumber || "";
+    let targetUrl = "";
+    if (invoiceNumber) {
+      const cleanInvoiceNumber = String(invoiceNumber).trim().replace(/^#+/, "");
+      targetUrl = `https://dailybike.dealpos.net/api/v3/Invoice/Detail?Number=${encodeURIComponent(cleanInvoiceNumber)}&OutletID=${outletId}`;
+    } else {
+      targetUrl = "https://dailybike.dealpos.net/api/v3/ParkedOrderDisplay/Default?PageNumber=1&PageSize=1000&OutletID={outletId}&OrderType=Parked&Sort=Desc&MaxHours=2160"
+        .replace("{outletId}", outletId);
+    }
+
+    const fetchRes = await fetch(
+      targetUrl,
       {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -69,18 +81,19 @@ export default async function handler(req: any, res: any) {
       }
     );
 
-    if (!ordersRes.ok) {
-      const errText = await ordersRes.text();
-      return res.status(ordersRes.status).json({
-        error: `Dealpos fetch orders failed with status ${ordersRes.status}`,
+    if (!fetchRes.ok) {
+      const errText = await fetchRes.text();
+      return res.status(fetchRes.status).json({
+        error: `Dealpos fetch failed with status ${fetchRes.status}`,
         details: errText
       });
     }
 
-    const ordersData = await ordersRes.json();
-    return res.status(200).json(ordersData);
+    const responseData = await fetchRes.json();
+    return res.status(200).json(responseData);
 
   } catch (error: any) {
+    console.error("[DealPOS Proxy API Error]:", error);
     return res.status(500).json({
       error: error.message || "Unknown proxy error",
     });

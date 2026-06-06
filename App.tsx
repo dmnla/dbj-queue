@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   HashRouter as Router,
   Routes,
@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import MechanicMode from "./pages/MechanicMode";
 import CustomerDisplay from "./pages/CustomerDisplay";
 import Reports from "./pages/Reports";
+import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
 import StorageMode from "./pages/StorageMode";
 import StorageFormPage from "./pages/StorageFormPage";
@@ -22,6 +23,7 @@ import {
   Branch,
   Customer,
   StorageSlot,
+  flag_type,
 } from "./types";
 import {
   subscribeToTickets,
@@ -42,6 +44,13 @@ import {
   removeServiceFromCloud,
   updateCustomerInCloud,
   removeCustomerFromCloud,
+  subscribeToIgnoredDealpos,
+  ignoreDealposOrderIdInCloud,
+  subscribeToOperationalStatus,
+  toggleBengkelOpenInCloud,
+  toggleOvertimeInCloud,
+  updateOperationalConfigInCloud,
+  updateTicketInCloud,
 } from "./services/ticketService";
 import { MapPin } from "lucide-react";
 
@@ -108,9 +117,25 @@ function App() {
   const [services, setServices] = useState<ServiceDefinition[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [storageSlots, setStorageSlots] = useState<StorageSlot[]>([]);
+  const [ignoredDealposIds, setIgnoredDealposIds] = useState<string[]>([]);
+
+  const [isBengkelOpen, setIsBengkelOpen] = useState(true);
+  const [isOvertimeActive, setIsOvertimeActive] = useState(false);
+  const [isDebriefInProgress, setIsDebriefInProgress] = useState(false);
+  const [debriefFrozenAt, setDebriefFrozenAt] = useState<string | null>(null);
+  const [overtimeTicketIds, setOvertimeTicketIds] = useState<string[]>([]);
+  const [overtimeStoppedAt, setOvertimeStoppedAt] = useState<string | null>(null);
 
   // Real-time subscriptions to Firestore
   useEffect(() => {
+    // Reset all operational state when branch changes to avoid UI flicker/leaks between branches
+    setIsBengkelOpen(true);
+    setIsOvertimeActive(false);
+    setIsDebriefInProgress(false);
+    setDebriefFrozenAt(null);
+    setOvertimeTicketIds([]);
+    setOvertimeStoppedAt(null);
+
     const unsubscribeTickets = subscribeToTickets((updatedTickets) => {
       setTickets(updatedTickets);
     });
@@ -130,14 +155,34 @@ function App() {
       if (slots.length === 0) initializeStorageSlots();
     });
 
+    const unsubscribeIgnoredDealpos = subscribeToIgnoredDealpos((updatedIds) => {
+      setIgnoredDealposIds(updatedIds);
+    });
+
+    let unsubscribeOps = () => {};
+    if (currentBranch) {
+      unsubscribeOps = subscribeToOperationalStatus(currentBranch, (data) => {
+        setIsBengkelOpen(data.isBengkelOpen);
+        setIsOvertimeActive(data.isOvertimeActive);
+        setIsDebriefInProgress(!!data.isDebriefInProgress);
+        setDebriefFrozenAt(data.debriefFrozenAt || null);
+        setOvertimeTicketIds(data.overtimeTicketIds || []);
+        setOvertimeStoppedAt(data.overtimeStoppedAt || null);
+      });
+    }
+
     return () => {
       unsubscribeTickets();
       unsubscribeMechanics();
       unsubscribeServices();
       unsubscribeCustomers();
       unsubscribeStorage();
+      unsubscribeIgnoredDealpos();
+      unsubscribeOps();
     };
   }, [currentBranch]);
+
+
 
   const handleBranchSelect = (branch: Branch) => {
     setCurrentBranch(branch);
@@ -172,6 +217,23 @@ function App() {
     return services.filter((s) => s.branches.includes(currentBranch));
   }, [services, currentBranch]);
 
+  const isActionProhibitedForAdmin = (ticketId?: string) => {
+    if (debriefFrozenAt || isDebriefInProgress) {
+      return true;
+    }
+    if (!isBengkelOpen && !isOvertimeActive) {
+      return true;
+    }
+    if (isOvertimeActive) {
+      if (!ticketId) {
+        return true; // Cannot add new tickets during overtime
+      }
+      const ids = Array.isArray(overtimeTicketIds) ? overtimeTicketIds : [];
+      return !ids.includes(ticketId);
+    }
+    return false;
+  };
+
   const addTicket = (
     name: string,
     phone: string,
@@ -180,9 +242,15 @@ function App() {
     notes: string,
     customerId?: string,
     dealposOrderId?: string,
+    flags?: flag_type[],
+    serviceSkuCodes?: string[],
   ) => {
     if (!currentBranch) return;
-    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId);
+    if (isActionProhibitedForAdmin()) {
+      console.warn("Action blocked: operational state is locked/frozen");
+      return;
+    }
+    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId, flags, serviceSkuCodes);
   };
 
   const updateTicketStatus = (
@@ -194,6 +262,10 @@ function App() {
     followUpResult?: string,
     followUpPhotoUrl?: string
   ) => {
+    if (isActionProhibitedForAdmin(id)) {
+      console.warn("Action blocked: ticket is locked/frozen");
+      return;
+    }
     const ticketToUpdate = tickets.find((t) => t.id === id);
     if (!ticketToUpdate) return;
     updateTicketStatusInCloud(
@@ -213,11 +285,26 @@ function App() {
     serviceTypes: string[],
     notes?: string,
   ) => {
+    if (isActionProhibitedForAdmin(id)) {
+      console.warn("Action blocked: ticket is locked/frozen");
+      return;
+    }
     updateTicketServicesInCloud(id, serviceTypes, notes);
   };
 
-  const connectTicketToDealpos = (id: string, dealposOrderId: string) => {
-    connectTicketToDealposOrderIdInCloud(id, dealposOrderId);
+  const connectTicketToDealpos = (
+    id: string,
+    dealposOrderId: string,
+    customerName?: string,
+    phone?: string,
+    serviceSkuCodes?: string[],
+    flags?: flag_type[],
+  ) => {
+    if (isActionProhibitedForAdmin(id)) {
+      console.warn("Action blocked: ticket is locked/frozen");
+      return;
+    }
+    connectTicketToDealposOrderIdInCloud(id, dealposOrderId, customerName, phone, serviceSkuCodes, flags);
   };
 
   // Settings Handlers
@@ -240,6 +327,54 @@ function App() {
     bikes: string[],
   ) => updateCustomerInCloud(id, name, phone, bikes);
   const handleRemoveCustomer = (id: string) => removeCustomerFromCloud(id);
+
+  const isStoppingOvertime = useRef(false);
+
+  const handleStopOvertime = useCallback(async () => {
+    if (!currentBranch || isStoppingOvertime.current) return;
+    isStoppingOvertime.current = true;
+    try {
+      // Clear overtime pre-selected mechanics for all unprocessed queue cards in the Menunggu section
+      const waitingOvertimeTickets = tickets.filter(
+        (t) => t.branch === currentBranch && t.status === "waiting" && t.overtimeMechanic
+      );
+      for (const t of waitingOvertimeTickets) {
+        await updateTicketInCloud(t.id, { overtimeMechanic: null });
+      }
+
+      await updateOperationalConfigInCloud(currentBranch, {
+        isOvertimeActive: false,
+        isBengkelOpen: false, // End of overtime closes the workshop as well
+        overtimeStoppedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Failed to stop overtime:", err);
+    }
+  }, [currentBranch, tickets]);
+
+  // Reset the stop lock state when overtime is no longer active
+  useEffect(() => {
+    if (!isOvertimeActive) {
+      isStoppingOvertime.current = false;
+    }
+  }, [isOvertimeActive]);
+
+  // Auto-finish overtime when all selected overtime tickets are finished
+  useEffect(() => {
+    if (isOvertimeActive && overtimeTicketIds && overtimeTicketIds.length > 0 && tickets.length > 0 && !isStoppingOvertime.current) {
+      const selectedTickets = tickets.filter(t => overtimeTicketIds.includes(t.id));
+      if (selectedTickets.length > 0) {
+        // Active overtime tickets are those whose status is 'active', 'waiting', or 'pending'
+        const activeOvertimeTickets = selectedTickets.filter(
+          (t) => t.status === "active" || t.status === "waiting" || t.status === "pending"
+        );
+        if (activeOvertimeTickets.length === 0) {
+          console.log("All selected overtime tickets are completed! Auto-finishing overtime...");
+          handleStopOvertime();
+        }
+      }
+    }
+  }, [tickets, isOvertimeActive, overtimeTicketIds, handleStopOvertime]);
 
   return (
     <Router>
@@ -272,6 +407,37 @@ function App() {
                         updateTicketServices={updateTicketServices}
                         connectTicketToDealpos={connectTicketToDealpos}
                         currentBranch={currentBranch}
+                        ignoredDealposIds={ignoredDealposIds}
+                        onIgnoreDealposId={ignoreDealposOrderIdInCloud}
+                        isBengkelOpen={isBengkelOpen}
+                        isOvertimeActive={isOvertimeActive}
+                        isDebriefInProgress={isDebriefInProgress}
+                        debriefFrozenAt={debriefFrozenAt}
+                        overtimeTicketIds={overtimeTicketIds}
+                        overtimeStoppedAt={overtimeStoppedAt}
+                        onToggleBengkelOpen={async (isOpen) => {
+                          if (isOpen) {
+                            await updateOperationalConfigInCloud(currentBranch, {
+                              isBengkelOpen: true,
+                              isOvertimeActive: false,
+                              isDebriefInProgress: false,
+                              debriefFrozenAt: null,
+                              overtimeTicketIds: [],
+                              overtimeStoppedAt: null,
+                            });
+                          } else {
+                            await updateOperationalConfigInCloud(currentBranch, {
+                              isBengkelOpen: false,
+                              isOvertimeActive: false,
+                              isDebriefInProgress: false,
+                              debriefFrozenAt: null,
+                              overtimeTicketIds: [],
+                              overtimeStoppedAt: null,
+                            });
+                          }
+                        }}
+                        onToggleOvertime={(isOvertime) => toggleOvertimeInCloud(currentBranch, isOvertime)}
+                        onStopOvertime={handleStopOvertime}
                       />
                     }
                   />
@@ -284,6 +450,11 @@ function App() {
                         services={branchServices}
                         updateTicketStatus={updateTicketStatus}
                         updateTicketServices={updateTicketServices}
+                        isDebriefInProgress={isDebriefInProgress}
+                        isBengkelOpen={isBengkelOpen}
+                        isOvertimeActive={isOvertimeActive}
+                        overtimeTicketIds={overtimeTicketIds}
+                        onStopOvertime={handleStopOvertime}
                       />
                     }
                   />
@@ -315,6 +486,22 @@ function App() {
                       <Reports
                         tickets={branchTickets}
                         storageSlots={storageSlots}
+                        currentBranch={currentBranch}
+                        isBengkelOpen={isBengkelOpen}
+                        isOvertimeActive={isOvertimeActive}
+                        isDebriefInProgress={isDebriefInProgress}
+                        debriefFrozenAt={debriefFrozenAt}
+                        overtimeTicketIds={overtimeTicketIds}
+                        overtimeStoppedAt={overtimeStoppedAt}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/performance"
+                    element={
+                      <Performance
+                        tickets={branchTickets}
+                        mechanics={branchMechanics}
                         currentBranch={currentBranch}
                       />
                     }
