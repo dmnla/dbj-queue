@@ -164,6 +164,7 @@ export const Performance: React.FC<PerformanceProps> = ({
 
     const filtered = tickets.filter(t => {
       if (t.branch !== currentBranch) return false;
+      if (t.status === "cancelled") return false;
       if (t.status !== "done") return false;
       if (!t.followUpResult || t.followUpResult.trim() === "") return false;
       
@@ -180,7 +181,7 @@ export const Performance: React.FC<PerformanceProps> = ({
     const berhasilPct = totalSelesai > 0 ? Math.round((berhasil / totalSelesai) * 100) : 0;
     const bermasalahPct = totalSelesai > 0 ? Math.round((bermasalah / totalSelesai) * 100) : 0;
 
-    // Admin penalties
+    // Admin penalties calculated from filtered (truly done tickets)
     const adminTelatUpdateAntrian = filtered.filter(t => 
       t.flags?.some(f2 => (f2 as any) === "TELAT_UPDATE_ANTRIAN" || (f2 as any) === "TELAT_UPDATE")
     ).length;
@@ -189,9 +190,8 @@ export const Performance: React.FC<PerformanceProps> = ({
       t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP")
     ).length;
 
-    // Mechanics list
+    // Mechanics list calculated from filtered (truly done tickets)
     const mechanicPerformance = mechanics.map(m => {
-      // Find done filtered tickets for this mechanic
       const picTickets = filtered.filter(t => {
         const nameUpper = m.name.trim().toUpperCase();
         return (t.mechanic?.trim().toUpperCase() === nameUpper) || (t.overtimeMechanic?.trim().toUpperCase() === nameUpper);
@@ -213,9 +213,9 @@ export const Performance: React.FC<PerformanceProps> = ({
       ).length;
 
       const totalPenalties = telatUpdateService + telatUpdateSelesai + resiHilang;
-      const complianceScore = selesaiPicCount > 0 
+      const complianceScore = (selesaiPicCount + garansiPicCount) > 0 
         ? Math.max(0, 100 - Math.round((totalPenalties / (selesaiPicCount + garansiPicCount)) * 100))
-        : 100;
+        : (totalPenalties > 0 ? 0 : 100);
 
       return {
         id: m.id,
@@ -240,7 +240,8 @@ export const Performance: React.FC<PerformanceProps> = ({
       adminTelatUpdateAntrian,
       adminTelatFollowUp,
       mechanicPerformance,
-      rawFilteredCount: filtered.length
+      rawFilteredCount: filtered.length,
+      totalProcessed: filtered.length
     };
   }, [activePeriod, tickets, mechanics, currentBranch]);
 
@@ -251,6 +252,7 @@ export const Performance: React.FC<PerformanceProps> = ({
     return list.map(p => {
       const filtered = tickets.filter(t => {
         if (t.branch !== currentBranch) return false;
+        if (t.status === "cancelled") return false;
         if (t.status !== "done") return false;
         if (!t.followUpResult || t.followUpResult.trim() === "") return false;
         
@@ -583,7 +585,7 @@ export const Performance: React.FC<PerformanceProps> = ({
                       ? "bg-amber-100 text-amber-700" 
                       : "bg-emerald-50 text-emerald-700"
                   }`}>
-                    {stats.adminTelatUpdateAntrian} Unit Telat
+                    {stats.adminTelatUpdateAntrian} Unit Telat ({stats.totalProcessed > 0 ? Math.round((stats.adminTelatUpdateAntrian / stats.totalProcessed) * 100) : 0}%)
                   </div>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -591,7 +593,7 @@ export const Performance: React.FC<PerformanceProps> = ({
                     className={`h-full rounded-full transition-all duration-500 ${
                       stats.adminTelatUpdateAntrian > 0 ? "bg-amber-500" : "bg-emerald-500"
                     }`}
-                    style={{ width: `${Math.min(100, stats.adminTelatUpdateAntrian * 15 || 5)}%` }}
+                    style={{ width: `${stats.totalProcessed > 0 ? Math.round((stats.adminTelatUpdateAntrian / stats.totalProcessed) * 100) : 0}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 font-bold leading-normal">
@@ -610,7 +612,7 @@ export const Performance: React.FC<PerformanceProps> = ({
                       ? "bg-rose-100 text-rose-700" 
                       : "bg-emerald-50 text-emerald-700"
                   }`}>
-                    {stats.adminTelatFollowUp} Unit Telat
+                    {stats.adminTelatFollowUp} Unit Telat ({stats.totalProcessed > 0 ? Math.round((stats.adminTelatFollowUp / stats.totalProcessed) * 100) : 0}%)
                   </div>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -618,7 +620,7 @@ export const Performance: React.FC<PerformanceProps> = ({
                     className={`h-full rounded-full transition-all duration-500 ${
                       stats.adminTelatFollowUp > 0 ? "bg-rose-500" : "bg-emerald-500"
                     }`}
-                    style={{ width: `${Math.min(100, stats.adminTelatFollowUp * 15 || 5)}%` }}
+                    style={{ width: `${stats.totalProcessed > 0 ? Math.round((stats.adminTelatFollowUp / stats.totalProcessed) * 100) : 0}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 font-bold leading-normal">

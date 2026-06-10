@@ -567,6 +567,9 @@ export const updateTicketStatusInCloud = async (
   if (finalStatus !== currentTicket.status) {
     updates.lastStatusChange = new Date().toISOString();
   }
+  let updatedFlags = [...(currentTicket.flags || [])];
+  let flagsChanged = false;
+
   if (finalStatus === "active" && currentTicket.status === "waiting")
     updates["timestamps.called"] = new Date().toISOString();
   if (finalStatus === "ready") {
@@ -576,9 +579,9 @@ export const updateTicketStatusInCloud = async (
       const diffMs = new Date().getTime() - startMs;
       if (diffMs < 5 * 60 * 1000) {
         // Less than 5 minutes
-        const existingFlags = currentTicket.flags || [];
-        if (!existingFlags.includes("ANOMALI_DURASI_SERVICE" as any)) {
-          updates.flags = [...existingFlags, "ANOMALI_DURASI_SERVICE" as any];
+        if (!updatedFlags.includes("ANOMALI_DURASI_SERVICE" as any)) {
+          updatedFlags.push("ANOMALI_DURASI_SERVICE" as any);
+          flagsChanged = true;
         }
       }
     }
@@ -592,6 +595,26 @@ export const updateTicketStatusInCloud = async (
     if (!currentTicket.timestamps.taken) {
       updates["timestamps.taken"] = new Date().toISOString();
     }
+
+    // Auto-detect late follow-up (total max 8 days since unit taken)
+    if (currentTicket.timestamps.taken) {
+      const takenTime = new Date(currentTicket.timestamps.taken).getTime();
+      const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
+      if (daysSinceTaken >= 8) {
+        if (!updatedFlags.includes("TELAT_FOLLOW_UP" as any)) {
+          updatedFlags.push("TELAT_FOLLOW_UP" as any);
+          flagsChanged = true;
+        }
+        if (!updatedFlags.includes("LATE_FOLLOW_UP" as any)) {
+          updatedFlags.push("LATE_FOLLOW_UP" as any);
+          flagsChanged = true;
+        }
+      }
+    }
+  }
+
+  if (flagsChanged) {
+    updates.flags = updatedFlags;
   }
   if (mechanic !== undefined) updates.mechanic = mechanic;
   if (reason !== undefined) updates.cancellationReason = reason;

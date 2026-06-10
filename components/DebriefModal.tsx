@@ -239,12 +239,25 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
   };
 
+  const isLateAfternoonStart = (t: Ticket) => {
+    if (!t.timestamps?.called) return false;
+    if (!isToday(t.timestamps.called)) return false;
+    const d = new Date(t.timestamps.called);
+    const hour = d.getHours();
+    const min = d.getMinutes();
+    return hour > 16 || (hour === 16 && min >= 45);
+  };
+
   const anomalyTickets = useMemo(() => {
     return tickets.filter(t => {
       const hasAnomalyFlag = t.flags?.includes("ANOMALI_DURASI_SERVICE" as any);
-      const isSelesaiHariIni = (t.status === "ready" || t.status === "done" || t.status === "taken") && (isToday(t.timestamps.ready) || isToday(t.timestamps.finished));
+      const isSelesaiHariIni = (t.status === "ready" || t.status === "done" || t.status === "taken") && (isToday(t.timestamps.ready));
       const isSelesaiAtauActive = t.status === "active" || isSelesaiHariIni;
-      return hasAnomalyFlag && isSelesaiAtauActive;
+      const isTraditionalAnomaly = hasAnomalyFlag && isSelesaiAtauActive;
+
+      const isLateStart = isLateAfternoonStart(t);
+
+      return isTraditionalAnomaly || isLateStart;
     });
   }, [tickets]);
 
@@ -362,7 +375,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     setServiceSaved(prev => ({ ...prev, [ticketId]: true }));
   };
 
-  // Step 5: Save anomaly reasons (TELAT_UPDATE_SELESAI)
+  // Step 5: Save anomaly reasons (TELAT_UPDATE_SELESAI / TELAT_UPDATE_SERVICE)
   const handleSaveAnomaly = async (ticketId: string) => {
     const isTelat = anomalyTelatUpdate[ticketId];
     const userReason = anomalyReasons[ticketId]?.trim();
@@ -374,8 +387,20 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     const currentFlags = t.flags || [];
     const updatedFlags = [...currentFlags];
-    if (!updatedFlags.includes("TELAT_UPDATE_SELESAI" as any)) {
-      updatedFlags.push("TELAT_UPDATE_SELESAI" as any);
+
+    const isLateStart = isLateAfternoonStart(t);
+    const isTraditional = t.flags?.includes("ANOMALI_DURASI_SERVICE" as any);
+
+    if (isTelat) {
+      if (isLateStart) {
+        if (!updatedFlags.includes("TELAT_UPDATE_SERVICE" as any)) {
+          updatedFlags.push("TELAT_UPDATE_SERVICE" as any);
+        }
+      } else if (isTraditional) {
+        if (!updatedFlags.includes("TELAT_UPDATE_SELESAI" as any)) {
+          updatedFlags.push("TELAT_UPDATE_SELESAI" as any);
+        }
+      }
     }
 
     const savedReasonString = isTelat ? "Telat Update" : userReason;
@@ -470,6 +495,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     const y = today.getFullYear();
     const dateStr = `${d}/${m}/${y}`;
 
+    const { startDate, endDate } = getMonthlyCutoffDates();
+    const isWithinMonthlyCutoff = (tsString: string | null | undefined) => {
+      if (!tsString) return false;
+      const tDate = new Date(tsString);
+      return tDate >= startDate && tDate <= endDate;
+    };
+
     // Filter today's branch tickets
     const branchSpec = tickets.filter(t => t.branch === branch);
 
@@ -479,6 +511,11 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       isToday(t.timestamps.arrival)
     ).length;
 
+    const monthlyAntrian = branchSpec.filter(t => 
+      (t.flags?.includes("TELAT_UPDATE_ANTRIAN" as any) || t.flags?.includes("TELAT_UPDATE" as any)) && 
+      isWithinMonthlyCutoff(t.timestamps.arrival)
+    ).length;
+
     const countService = branchSpec.filter(t => 
       t.flags?.includes("TELAT_UPDATE_SERVICE" as any) && 
       (isToday(t.timestamps.called) || isToday(t.timestamps.arrival))
@@ -486,12 +523,12 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     const countSelesai = branchSpec.filter(t => 
       t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
-      (isToday(t.timestamps.ready) || isToday(t.timestamps.finished))
+      (isToday(t.timestamps.ready))
     ).length;
 
     const countResiHilang = branchSpec.filter(t => 
       t.flags?.includes("RESI_HILANG" as any) && 
-      (isToday(t.timestamps.ready) || isToday(t.timestamps.finished) || (t.status === "ready" && isToday(t.timestamps.arrival)))
+      (isToday(t.timestamps.ready) || (t.status === "ready" && isToday(t.timestamps.arrival)))
     ).length;
 
     const countFollowUp = branchSpec.filter(t => {
@@ -500,6 +537,21 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       const takenTime = new Date(t.timestamps.taken).getTime();
       const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
       return daysSinceTaken >= 8;
+    }).length;
+
+    const monthlyFollowUp = branchSpec.filter(t => {
+      if (t.status === "done") {
+        const isFinishedThisMonth = t.timestamps?.finished && isWithinMonthlyCutoff(t.timestamps.finished);
+        const isLate = t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP");
+        return isFinishedThisMonth && isLate;
+      } else if (t.status === "taken") {
+        if (!t.timestamps.taken) return false;
+        if (isTicketExcludedFromFollowUp(t)) return false;
+        const takenTime = new Date(t.timestamps.taken).getTime();
+        const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
+        return daysSinceTaken >= 8;
+      }
+      return false;
     }).length;
 
     // Active
@@ -535,16 +587,34 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
         (isToday(t.timestamps.called) || isToday(t.timestamps.arrival))
       ).length;
 
+      const monthlyPicCountService = branchSpec.filter(t => 
+        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
+        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) && 
+        (isWithinMonthlyCutoff(t.timestamps.called) || isWithinMonthlyCutoff(t.timestamps.arrival))
+      ).length;
+
       const picCountSelesai = branchSpec.filter(t => 
         (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
         t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
-        (isToday(t.timestamps.ready) || isToday(t.timestamps.finished))
+        (isToday(t.timestamps.ready))
+      ).length;
+
+      const monthlyPicCountSelesai = branchSpec.filter(t => 
+        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
+        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
+        isWithinMonthlyCutoff(t.timestamps.ready)
       ).length;
 
       const picCountResiHilang = branchSpec.filter(t => 
         (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
         t.flags?.includes("RESI_HILANG" as any) && 
-        (isToday(t.timestamps.ready) || isToday(t.timestamps.finished) || (t.status === "ready" && isToday(t.timestamps.arrival)))
+        (isToday(t.timestamps.ready) || (t.status === "ready" && isToday(t.timestamps.arrival)))
+      ).length;
+
+      const monthlyPicCountResiHilang = branchSpec.filter(t => 
+        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
+        t.flags?.includes("RESI_HILANG" as any) && 
+        (isWithinMonthlyCutoff(t.timestamps.ready) || (t.status === "ready" && isWithinMonthlyCutoff(t.timestamps.arrival)))
       ).length;
 
       const hasActiveCard = branchSpec.some(t => {
@@ -557,9 +627,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
       if (hasActiveCard || hasIndicators) {
         mechanicSection += `\n*MECHANIC - ${picName}*\n`;
-        mechanicSection += `- Telat Update Service: ${picCountService} Unit\n`;
-        mechanicSection += `- Telat Update Selesai: ${picCountSelesai} Unit\n`;
-        mechanicSection += `- Resi Hilang: ${picCountResiHilang} Unit\n`;
+        mechanicSection += `- Telat Update Service: ${picCountService} Unit (Bulan ini: ${monthlyPicCountService} Unit)\n`;
+        mechanicSection += `- Telat Update Selesai: ${picCountSelesai} Unit (Bulan ini: ${monthlyPicCountSelesai} Unit)\n`;
+        mechanicSection += `- Resi Hilang: ${picCountResiHilang} Unit (Bulan ini: ${monthlyPicCountResiHilang} Unit)\n`;
       }
     });
 
@@ -589,8 +659,8 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     let report = `*LAPORAN BENGKEL DAILY BIKE*\n_Tanggal: ${dateStr}_\n\n`;
     report += `*HASIL DEBRIEFING:*\n`;
     report += `*ADMIN*\n`;
-    report += `- Telat Update Antrian : ${countAntrian} Unit\n`;
-    report += `- Telat Follow Up: ${countFollowUp} Unit\n`;
+    report += `- Telat Update Antrian : ${countAntrian} Unit (Bulan ini: ${monthlyAntrian} Unit)\n`;
+    report += `- Telat Follow Up: ${countFollowUp} Unit (Bulan ini: ${monthlyFollowUp} Unit)\n`;
     if (mechanicSection) {
       report += mechanicSection;
     }
@@ -662,20 +732,39 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     return t.followUpResult?.trim() === 'Kendala';
   };
 
-  const getMonthlyCutoffDates = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth(); // 0-indexed
+  const getMonthlyCutoffDates = (d?: Date) => {
+    const date = d || new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth(); // 0-indexed
+    const day = date.getDate();
 
     let startYear = year;
-    let startMonth = month - 1;
-    if (startMonth < 0) {
-      startMonth = 11;
-      startYear = year - 1;
+    let startMonth = month;
+    let endYear = year;
+    let endMonth = month;
+
+    if (day >= 29) {
+      // Current cycle started on 29th of this month and ends on 28th of next month
+      startYear = year;
+      startMonth = month;
+      endMonth = month + 1;
+      if (endMonth > 11) {
+        endMonth = 0;
+        endYear = year + 1;
+      }
+    } else {
+      // Current cycle started on 29th of previous month and ends on 28th of this month
+      endYear = year;
+      endMonth = month;
+      startMonth = month - 1;
+      if (startMonth < 0) {
+        startMonth = 11;
+        startYear = year - 1;
+      }
     }
 
     const startDate = new Date(startYear, startMonth, 29, 0, 0, 0, 0);
-    const endDate = new Date(year, month, 28, 23, 59, 59, 999);
+    const endDate = new Date(endYear, endMonth, 28, 23, 59, 59, 999);
 
     return { startDate, endDate };
   };
@@ -1205,84 +1294,130 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
             <div className="space-y-6">
               <div className="bg-red-50 border border-red-100 p-4 rounded-2xl">
                 <h4 className="text-sm font-black text-red-950 uppercase tracking-tight flex items-center gap-2">
-                  <AlertCircle size={16} className="text-red-700 animate-pulse" /> 3. Review Anomali Durasi Selesai (Selesai &lt; 5 Menit)
+                  <AlertCircle size={16} className="text-red-700 animate-pulse" /> 3. Review Anomali &amp; Pemindahan Sore (Selesai &lt; 5 Menit / Lewat 16:45)
                 </h4>
                 <p className="text-xs text-red-700 mt-1 font-semibold leading-relaxed">
-                  Ditemukan kartu antrian yang dikerjakan selesai dalam waktu kurang dari 5 menit harian. Harap isikan alasan di balik durasi anomali ini atau centang opsi "Telat Update" (otomatis bertagar <strong className="font-bold">TELAT_UPDATE_SELESAI</strong>).
+                  Ditemukan kartu antrian dengan durasi di bawah 5 menit, ATAU kartu yang baru dipindahkan dari Menunggu ke Dikerjakan sore hari (lewat pukul 16:45). Hubungi admin/mekanik untuk menanyakan alasan, atau centang opsi "Telat Update" (otomatis bertagar <strong className="font-bold">TELAT_UPDATE_SELESAI</strong> atau <strong className="font-bold">TELAT_UPDATE_SERVICE</strong>).
                 </p>
               </div>
 
               {anomalyTickets.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <CheckSquare className="text-emerald-500 mx-auto" size={32} />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Tidak ada kartu anomali durasi harian!</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Tidak ada kartu anomali durasi atau pemindahan sore harian!</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {anomalyTickets.map(ticket => (
-                    <div key={ticket.id} className="p-4 border border-slate-200/80 rounded-2xl flex flex-col justify-between gap-3 bg-white shadow-sm hover:shadow transition-shadow">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black bg-red-100 text-red-800 px-2 py-0.5 rounded uppercase">
-                              #{ticket.ticketNumber || "NO-NUM"}
-                            </span>
-                            <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                              {ticket.customerName}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 font-bold mt-1">
-                            Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")} — PIC: {ticket.mechanic || "Belum ada"}
-                          </p>
-                        </div>
-                        <span className="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded font-black border border-red-200 uppercase tracking-tight">
-                          ANOMALI 5 MENIT
-                        </span>
-                      </div>
+                  {anomalyTickets.map(ticket => {
+                    const isLateStart = isLateAfternoonStart(ticket);
+                    const isTraditional = ticket.flags?.includes("ANOMALI_DURASI_SERVICE" as any);
+                    
+                    let badgeLabel = "ANOMALI 5 MENIT";
+                    let badgeColor = "bg-red-50 text-red-700 border-red-200";
+                    if (isLateStart && isTraditional) {
+                      badgeLabel = "ANOMALI GANDA (5M & SORE)";
+                      badgeColor = "bg-purple-50 text-purple-700 border-purple-200";
+                    } else if (isLateStart) {
+                      badgeLabel = "PEMINDAHAN SORE (>= 16:45)";
+                      badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                    }
 
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 mt-1">
-                        {anomalySaved[ticket.id] ? (
-                          <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl text-xs font-black uppercase w-full justify-center">
-                            <Check size={16} /> Alasan Disimpan
-                          </div>
-                        ) : (
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full justify-between">
-                            <div className="flex-1 flex gap-2">
-                              <input
-                                type="text"
-                                disabled={!!anomalyTelatUpdate[ticket.id]}
-                                placeholder="Tuliskan alasan durasi singkat..."
-                                className="flex-1 p-2 text-xs border border-slate-200 rounded-lg outline-none bg-white font-semibold text-slate-800 disabled:opacity-55"
-                                value={anomalyReasons[ticket.id] || ""}
-                                onChange={(e) => setAnomalyReasons(prev => ({ ...prev, [ticket.id]: e.target.value }))}
-                              />
-                              <label className="flex items-center gap-1 shrink-0 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 accent-slate-800 rounded border-slate-300"
-                                  checked={!!anomalyTelatUpdate[ticket.id]}
-                                  onChange={(e) => {
-                                    setAnomalyTelatUpdate(prev => ({ ...prev, [ticket.id]: e.target.checked }));
-                                    if (e.target.checked) {
-                                      setAnomalyReasons(prev => ({ ...prev, [ticket.id]: "" }));
-                                    }
-                                  }}
-                                />
-                                <span className="text-[10px] font-bold text-slate-700 uppercase">Telat Update</span>
-                              </label>
+                    const placeholderText = isLateStart 
+                      ? "Tuliskan alasan baru dikerjakan sore..." 
+                      : "Tuliskan alasan durasi singkat...";
+
+                    const isSavedSaved = anomalySaved[ticket.id] || 
+                      ticket.flags?.includes("TELAT_UPDATE_SELESAI" as any) || 
+                      ticket.flags?.includes("TELAT_UPDATE_SERVICE" as any) || 
+                      ticket.notes?.includes("[Reason:");
+
+                    return (
+                      <div key={ticket.id} className="p-4 border border-slate-200/80 rounded-2xl flex flex-col justify-between gap-3 bg-white shadow-sm hover:shadow transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black bg-red-100 text-red-800 px-2 py-0.5 rounded uppercase">
+                                #{ticket.ticketNumber || "NO-NUM"}
+                              </span>
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
+                                {ticket.customerName}
+                              </span>
                             </div>
-                            <button
-                              onClick={() => handleSaveAnomaly(ticket.id)}
-                              disabled={!anomalyTelatUpdate[ticket.id] && !anomalyReasons[ticket.id]}
-                              className="bg-slate-900 hover:bg-black disabled:opacity-40 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shrink-0"
-                            >
-                              Simpan Alasan
-                            </button>
+                            <p className="text-xs text-slate-500 font-bold mt-1">
+                              Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")} — PIC: {ticket.mechanic || "Belum ada"}
+                            </p>
+                            {isLateStart && ticket.timestamps?.called && (
+                              <p className="text-[10px] text-amber-600 font-bold mt-0.5 uppercase tracking-tight">
+                                Mulai Kerja: {new Date(ticket.timestamps.called).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                              </p>
+                            )}
                           </div>
-                        )}
+                          <span className={`text-[10px] px-2 py-1 rounded font-black border uppercase tracking-tight ${badgeColor}`}>
+                            {badgeLabel}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 mt-1">
+                          {isSavedSaved ? (
+                            <div className="flex flex-col w-full text-center items-center justify-center p-1">
+                              <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl text-xs font-black uppercase w-full justify-center">
+                                <Check size={16} /> Alasan Disimpan
+                              </div>
+                              {ticket.notes && ticket.notes.includes("[Reason:") && (
+                                <p className="text-xs text-slate-500 font-bold mt-1.5">
+                                  Alasan: {ticket.notes.split("[Reason:").pop()?.replace("]", "").trim()}
+                                </p>
+                              )}
+                              {ticket.flags?.includes("TELAT_UPDATE_SELESAI" as any) && (
+                                <p className="text-[10px] text-red-600 font-extrabold mt-1 uppercase">
+                                  Tag Penalti: TELAT_UPDATE_SELESAI
+                                </p>
+                              )}
+                              {ticket.flags?.includes("TELAT_UPDATE_SERVICE" as any) && (
+                                <p className="text-[10px] text-amber-600 font-extrabold mt-1 uppercase">
+                                  Tag Penalti: TELAT_UPDATE_SERVICE
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full justify-between">
+                              <div className="flex-1 flex gap-2">
+                                <input
+                                  type="text"
+                                  disabled={!!anomalyTelatUpdate[ticket.id]}
+                                  placeholder={placeholderText}
+                                  className="flex-1 p-2 text-xs border border-slate-200 rounded-lg outline-none bg-white font-semibold text-slate-800 disabled:opacity-55"
+                                  value={anomalyReasons[ticket.id] || ""}
+                                  onChange={(e) => setAnomalyReasons(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                                />
+                                <label className="flex items-center gap-1 shrink-0 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 accent-slate-800 rounded border-slate-300"
+                                    checked={!!anomalyTelatUpdate[ticket.id]}
+                                    onChange={(e) => {
+                                      setAnomalyTelatUpdate(prev => ({ ...prev, [ticket.id]: e.target.checked }));
+                                      if (e.target.checked) {
+                                        setAnomalyReasons(prev => ({ ...prev, [ticket.id]: "" }));
+                                      }
+                                    }}
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-700 uppercase">Telat Update</span>
+                                </label>
+                              </div>
+                              <button
+                                onClick={() => handleSaveAnomaly(ticket.id)}
+                                disabled={!anomalyTelatUpdate[ticket.id] && !anomalyReasons[ticket.id]}
+                                className="bg-slate-900 hover:bg-black disabled:opacity-40 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shrink-0"
+                              >
+                                Simpan Alasan
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
