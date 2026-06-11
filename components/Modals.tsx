@@ -2781,6 +2781,7 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
   const [preview, setPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<'Selesai' | 'Kendala' | 'Tidak Respond' | 'Milik Internal'>("Selesai");
+  const [wantsWarrantyClaim, setWantsWarrantyClaim] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -2789,6 +2790,7 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
       setPreview(null);
       setIsUploading(false);
       setSelectedOutcome("Selesai");
+      setWantsWarrantyClaim(true);
     }
 
     const globalPaste = (e: ClipboardEvent) => {
@@ -2860,7 +2862,7 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
       try {
         const url = await uploadFollowUpScreenshot(ticket, photo);
         if (url) {
-          onConfirm(ticket, selectedOutcome, url);
+          onConfirm(ticket, selectedOutcome, url, wantsWarrantyClaim);
           onClose();
         } else {
           alert("Gagal mengunggah foto. Silakan coba lagi.");
@@ -2937,6 +2939,42 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
             })}
           </div>
         </div>
+
+        {/* Warranty Claim Selection (Only if Kendala selected) */}
+        {selectedOutcome === "Kendala" && (
+          <div className="bg-amber-50 border border-amber-200/60 p-4 rounded-xl space-y-3">
+            <p className="text-xs font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🛠️</span> Opsi Klaim Garansi
+            </p>
+            <p className="text-[11px] text-amber-700 leading-normal font-medium">
+              Apakah pelanggan ingin melakukan klaim garansi untuk sepeda ini?
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setWantsWarrantyClaim(true)}
+                className={`flex-1 py-2.5 px-4 rounded-lg font-black text-xs uppercase tracking-wider transition-all border ${
+                  wantsWarrantyClaim
+                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                    : "bg-white text-slate-700 hover:bg-amber-50/50 border-slate-200"
+                }`}
+              >
+                Klaim Garansi (Ya)
+              </button>
+              <button
+                type="button"
+                onClick={() => setWantsWarrantyClaim(false)}
+                className={`flex-1 py-2.5 px-4 rounded-lg font-black text-xs uppercase tracking-wider transition-all border ${
+                  !wantsWarrantyClaim
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                    : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+                }`}
+              >
+                Selesai Tanpa Klaim (Tidak)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Conditional Screenshot Upload UI */}
         {selectedOutcome !== "Milik Internal" ? (

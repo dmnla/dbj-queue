@@ -29,6 +29,7 @@ import {
   Ban,
   MessageSquare,
   AlertTriangle,
+  MapPin,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -218,9 +219,19 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8 pb-20">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tight italic">
-            Dashboard Admin
-          </h2>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tight italic">
+              Dashboard Admin
+            </h2>
+            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              currentBranch === "mk" 
+                ? "bg-blue-100 text-blue-800 border border-blue-200" 
+                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+            }`}>
+              <MapPin size={10} />
+              {currentBranch === "mk" ? "Muara Karang" : "PIK 2"}
+            </span>
+          </div>
           <p className="text-sm text-slate-500 font-bold">
             Kelola operasional harian bengkel
           </p>
@@ -553,7 +564,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             ticket.unitSepeda,
             warrantyServices,
             notes,
-            undefined
+            ticket.customerId,
+            ticket.dealposOrderId
           );
         }}
       />
@@ -562,8 +574,11 @@ const Dashboard: React.FC<DashboardProps> = ({
         isOpen={followUpModalData.isOpen}
         onClose={() => setFollowUpModalData({ isOpen: false, ticket: null })}
         ticket={followUpModalData.ticket}
-        onConfirm={(ticket: any, outcome: string, photoUrl?: string) => {
+        onConfirm={(ticket: any, outcome: string, photoUrl?: string, wantsWarrantyClaim?: boolean) => {
           updateTicketStatus(ticket.id, "done", undefined, undefined, undefined, outcome, photoUrl);
+          if (outcome === "Kendala" && wantsWarrantyClaim) {
+            setKendalaModalData({ isOpen: true, ticket: ticket });
+          }
         }}
       />
 

@@ -266,6 +266,24 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     return tickets.filter(t => t.status === "ready");
   }, [tickets]);
 
+  const unclearedManualTickets = useMemo(() => {
+    return manualTickets.filter(t => !reconcileSaved[t.id]);
+  }, [manualTickets, reconcileSaved]);
+
+  const unclearedAnomalies = useMemo(() => {
+    return anomalyTickets.filter(t => {
+      const isSavedSaved = anomalySaved[t.id] || 
+        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) || 
+        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) || 
+        t.notes?.includes("[Reason:");
+      return !isSavedSaved;
+    });
+  }, [anomalyTickets, anomalySaved]);
+
+  const unclearedReceipts = useMemo(() => {
+    return readyTickets.filter(t => !receiptSaved[t.id]);
+  }, [readyTickets, receiptSaved]);
+
   // Fetch Dealpos open parked orders for step 3
   useEffect(() => {
     if (isOpen && step === 3) {
@@ -322,6 +340,24 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   };
 
   const handleNext = () => {
+    if (step === 3) {
+      if (unclearedManualTickets.length > 0) {
+        alert(`Harap selesaikan rekonsiliasi untuk semua kartu manual (${unclearedManualTickets.length} tersisa) sebelum melanjutkan.`);
+        return;
+      }
+    }
+    if (step === 5) {
+      if (unclearedAnomalies.length > 0) {
+        alert(`Harap simpan alasan anomali untuk semua kartu (${unclearedAnomalies.length} tersisa) sebelum melanjutkan.`);
+        return;
+      }
+    }
+    if (step === 6) {
+      if (unclearedReceipts.length > 0) {
+        alert(`Harap simpan konfirmasi resi fisik untuk semua kartu (${unclearedReceipts.length} tersisa) sebelum melanjutkan.`);
+        return;
+      }
+    }
     if (step < 8) setStep(step + 1);
   };
 
@@ -1187,6 +1223,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 </div>
               )}
 
+              {unclearedManualTickets.length > 0 && (
+                <div className="bg-amber-50 border border-amber-250 p-3.5 rounded-xl flex items-center gap-2.5 text-amber-800 text-xs font-black uppercase tracking-wider">
+                  <AlertCircle size={16} className="text-amber-600 animate-pulse" />
+                  <span>Sisa {unclearedManualTickets.length} Kartu Manual Belum Direkonsiliasi</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-4 border-t border-slate-100">
                 <button
                   onClick={handlePrev}
@@ -1421,6 +1464,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 </div>
               )}
 
+              {unclearedAnomalies.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-xl flex items-center gap-2.5 text-rose-800 text-xs font-black uppercase tracking-wider">
+                  <AlertCircle size={16} className="text-rose-600 animate-pulse" />
+                  <span>Sisa {unclearedAnomalies.length} Alasan Anomali Belum Disimpan</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-4 border-t border-slate-100">
                 <button
                   onClick={handlePrev}
@@ -1519,6 +1569,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {unclearedReceipts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-250 p-3.5 rounded-xl flex items-center gap-2.5 text-amber-800 text-xs font-black uppercase tracking-wider">
+                  <AlertCircle size={16} className="text-amber-600 animate-pulse" />
+                  <span>Sisa {unclearedReceipts.length} Konfirmasi Resi Belum Disimpan</span>
                 </div>
               )}
 

@@ -63,6 +63,18 @@ const TicketCard: React.FC<TicketCardProps> = ({
   const displayId = ticket.ticketNumber ? `#${ticket.ticketNumber}` : `#${ticket.id.slice(-4)}`;
   const isLongId = displayId.length > 6;
 
+  const formatDateTimeDisplay = (dateString: string | null | undefined) => {
+    if (!dateString) return "-";
+    const formatted = formatTime(dateString); // "DD/MM/YYYY HH:MM"
+    if (formatted === "-") return "-";
+    const parts = formatted.split(' ');
+    if (parts.length < 2) return formatted;
+    const dateParts = parts[0].split('/'); // ["DD", "MM", "YYYY"]
+    if (dateParts.length < 2) return formatted;
+    const dayMonth = `${dateParts[0]}/${dateParts[1]}`;
+    return `${dayMonth} ${parts[1]}`;
+  };
+
   return (
     <div className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 ${getStatusColor()} flex flex-col gap-3 relative overflow-hidden h-full ${locked ? 'opacity-65 bg-slate-50 border-slate-200/60 pointer-events-none select-none shadow-none hover:shadow-none' : ''}`}>
       
@@ -232,16 +244,16 @@ const TicketCard: React.FC<TicketCardProps> = ({
       <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono pt-1">
         <div className="flex items-center gap-1" title="Jam Kedatangan">
             <Clock size={10} />
-            <span>{formatTime(ticket.timestamps.arrival).split(' ')[1]}</span>
+            <span>{formatDateTimeDisplay(ticket.timestamps.arrival)}</span>
         </div>
         {ticket.timestamps.called && (
              <div className="flex items-center gap-1 text-blue-500" title="Jam Mulai">
-                <span>→ {formatTime(ticket.timestamps.called).split(' ')[1]}</span>
+                <span>→ {formatDateTimeDisplay(ticket.timestamps.called)}</span>
             </div>
         )}
         {ticket.timestamps.ready && (
              <div className="flex items-center gap-1 text-emerald-500" title="Jam Selesai">
-                <span>→ {formatTime(ticket.timestamps.ready).split(' ')[1]}</span>
+                <span>→ {formatDateTimeDisplay(ticket.timestamps.ready)}</span>
             </div>
         )}
       </div>
