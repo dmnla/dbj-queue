@@ -104,6 +104,15 @@ const TicketCard: React.FC<TicketCardProps> = ({
                 Manual Card
               </span>
             )}
+            {!locked && ticket.dealposOrderId && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-tight whitespace-nowrap">
+                DealPOS {(() => {
+                  const val = ticket.dealposOrderNumber || ticket.dealposOrderId || "";
+                  return val.startsWith("#") ? val : `#${val}`;
+                })()}
+              </span>
+            )}
+
         </div>
         
         {/* Top Right Action Buttons - Compact Icons */}

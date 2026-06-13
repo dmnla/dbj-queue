@@ -29,6 +29,11 @@ import {
 } from "../types";
 import { formatTime, uploadFollowUpScreenshot } from "../services/ticketService";
 
+const normalizeOrderId = (id: string | null | undefined): string => {
+  if (!id) return "";
+  return String(id).trim().replace(/^#+/, "").toLowerCase();
+};
+
 interface ModalBaseProps {
   title: string;
   isOpen: boolean;
@@ -334,7 +339,9 @@ export const CustomerSearchInput = ({
       const num = data.Number;
       const custName = data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
       const phoneVal = data.Customer?.Phone || data.Customer?.Cell || "";
-      const orderId = data.InvoiceID || data.OrderID || data.invoiceId || data.orderId || "";
+      
+      const formattedNum = num ? (String(num).startsWith("#") ? String(num) : `#${String(num)}`) : "";
+      const orderId = formattedNum || data.InvoiceID || data.OrderID || data.invoiceId || data.orderId || "";
       const createdTime = data.Created || data.Date || data.created || data.date || null;
       
       if (!orderId) {
@@ -381,14 +388,17 @@ export const CustomerSearchInput = ({
       const createdStr = recInvoiceResult?.found ? recInvoiceResult.Created : orderFromList?.Created;
       if (createdStr) {
         const createdTimestamp = new Date(createdStr).getTime();
-        const diffMs = Date.now() - createdTimestamp;
+        const referenceTime = reconcilingTicket?.timestamps?.arrival 
+          ? new Date(reconcilingTicket.timestamps.arrival).getTime()
+          : Date.now();
+        const diffMs = referenceTime - createdTimestamp;
         const diffMinutes = diffMs / (1000 * 60);
         if (diffMinutes > 15) {
           flags.push(flag_type.TELAT_UPDATE_ANTRIAN);
         }
       }
 
-      onConnect(initialManualTicketId, recSelectedOrderID, custName, phoneNum, skuCodes, flags);
+      onConnect(initialManualTicketId, recSelectedOrderID, custName, phoneNum, skuCodes, flags, orderFromList?.Number || recInvoiceResult?.Number || recSelectedOrderID);
       onClose();
       // Reset rec states
       setRecSearchQuery("");
@@ -431,7 +441,9 @@ export const CustomerSearchInput = ({
       const seenItems = new Set<string>();
 
       for (const entry of rawData) {
-        const orderId = entry.OrderID;
+        const rawNum = entry.Number || "";
+        const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
+        const orderId = formattedNum || entry.OrderID;
         if (!orderId) continue;
 
         if (!groups[orderId]) {
@@ -461,23 +473,42 @@ export const CustomerSearchInput = ({
       // Filter: at least one variant starts with "DBJS"
       const eligibleGroups = Object.values(groups).filter((g: any) => {
         return g.Variants.some((v: any) => {
-          const code = v.Code || "";
-          const itemId = v.ItemID || "";
+          const code = String(v.Code || "").trim().toUpperCase();
+          const itemId = String(v.ItemID || "").trim().toUpperCase();
           return code.startsWith("DBJS") || itemId.startsWith("DBJS");
         });
       });
 
-      // Filter out OrderIDs that are already in active/waiting tickets state or ignored
-      const importedOrderIds = new Set(
-        (tickets || [])
-          .map((t: any) => t.dealposOrderId)
-          .filter((id: any) => !!id)
-      );
-      const ignoredIdsSet = new Set(ignoredDealposIds || []);
+      // Filter out OrderIDs that have already reached their maximum imported ticket count or are ignored
+      const dealposTicketCounts: { [orderId: string]: number } = {};
+      (tickets || []).forEach((t: any) => {
+        if (t.dealposOrderId && t.status !== "cancelled") {
+          const key = normalizeOrderId(t.dealposOrderId);
+          dealposTicketCounts[key] = (dealposTicketCounts[key] || 0) + 1;
+        }
+      });
+      const ignoredIdsSet = new Set((ignoredDealposIds || []).map((id: any) => normalizeOrderId(id)));
 
-      const finalGroupedOrders = eligibleGroups.filter(
-        (g: any) => !importedOrderIds.has(g.OrderID) && !ignoredIdsSet.has(g.OrderID)
-      );
+      const finalGroupedOrders = eligibleGroups.filter((g: any) => {
+        const normGroupID = normalizeOrderId(g.OrderID);
+        if (ignoredIdsSet.has(normGroupID)) return false;
+
+        let totalAllowedTickets = 0;
+        if (g.Variants) {
+          g.Variants.forEach((v: any) => {
+            const code = String(v.Code || "").trim().toUpperCase();
+            const itemId = String(v.ItemID || "").trim().toUpperCase();
+            if (code.startsWith("DBJS") || itemId.startsWith("DBJS")) {
+              const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
+              totalAllowedTickets += qty;
+            }
+          });
+        }
+        if (totalAllowedTickets === 0) totalAllowedTickets = 1;
+
+        const currentCount = dealposTicketCounts[normGroupID] || 0;
+        return currentCount < totalAllowedTickets;
+      });
 
       setDealposOrders(finalGroupedOrders);
       setDealposStep("select-order");
@@ -629,7 +660,15 @@ export const CustomerSearchInput = ({
           }
         }
 
-        onConnect(selectedManualTicketId, selectedDealposOrder.OrderID, dealposCustomerName, dealposPhone, skuCodes, flags);
+        onConnect(
+          selectedManualTicketId,
+          selectedDealposOrder.OrderID,
+          dealposCustomerName,
+          dealposPhone,
+          skuCodes,
+          flags,
+          selectedDealposOrder.Number
+        );
       }
     } else {
       const flags: flag_type[] = [];
@@ -664,7 +703,8 @@ export const CustomerSearchInput = ({
           undefined,
           selectedDealposOrder.OrderID,
           flags,
-          skuCodes
+          skuCodes,
+          selectedDealposOrder.Number
         );
       }
     }
@@ -816,22 +856,25 @@ export const CustomerSearchInput = ({
                       if (matches.length === 0) {
                         return <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">Tidak ada kecocokan</div>;
                       }
-                      return matches.map(o => (
-                        <button
-                          key={o.OrderID}
-                          type="button"
-                          onClick={() => {
-                            setRecSelectedOrderID(o.OrderID);
-                            setRecSearchQuery(`#${o.Number} - ${o.Customer || o.ParkLabel || "No Name"}`);
-                            setRecDropdownOpen(false);
-                            setRecInvoiceResult(null); // Clear Option B result
-                          }}
-                          className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
-                        >
-                          <span>#{o.Number} - {o.Customer || o.ParkLabel || "No Name"}</span>
-                          <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
-                        </button>
-                      ));
+                      return matches.map(o => {
+                        const dispId = String(o.OrderID).startsWith("#") ? String(o.OrderID) : `#${String(o.OrderID)}`;
+                        return (
+                          <button
+                            key={o.OrderID}
+                            type="button"
+                            onClick={() => {
+                              setRecSelectedOrderID(o.OrderID);
+                              setRecSearchQuery(`${dispId} - ${o.Customer || o.ParkLabel || "No Name"}`);
+                              setRecDropdownOpen(false);
+                              setRecInvoiceResult(null); // Clear Option B result
+                            }}
+                            className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
+                          >
+                            <span>{dispId} - {o.Customer || o.ParkLabel || "No Name"}</span>
+                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
+                          </button>
+                        );
+                      });
                     })()}
                   </div>
                 </>
@@ -1633,9 +1676,27 @@ export const EditServicesModal = ({
         <div className="text-lg font-black text-slate-800">
           {ticket?.customerName}
         </div>
-        <div className="text-sm text-slate-500 font-medium">
+        <div className="text-sm text-slate-500 font-medium pb-2 border-b border-dashed border-slate-200">
           {ticket?.unitSepeda}
         </div>
+        {ticket?.dealposOrderId ? (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest font-mono">Status Reconsiled:</span>
+            <span className="text-xs font-black bg-blue-100 text-blue-800 px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+              🔗 DealPOS {(() => {
+                const val = ticket.dealposOrderNumber || ticket.dealposOrderId || "";
+                return val.startsWith("#") ? val : `#${val}`;
+              })()}
+            </span>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-[10px] font-extrabold text-amber-500 uppercase tracking-widest font-mono">Status Kartu:</span>
+            <span className="text-xs font-black bg-amber-100 text-amber-800 px-3 py-1 rounded-full uppercase tracking-wider">
+              📝 Manual Card
+            </span>
+          </div>
+        )}
       </div>
       <div className="space-y-6">
         <div>

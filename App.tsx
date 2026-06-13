@@ -244,13 +244,14 @@ function App() {
     dealposOrderId?: string,
     flags?: flag_type[],
     serviceSkuCodes?: string[],
+    dealposOrderNumber?: string,
   ) => {
     if (!currentBranch) return;
     if (isActionProhibitedForAdmin()) {
       console.warn("Action blocked: operational state is locked/frozen");
       return;
     }
-    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId, flags, serviceSkuCodes);
+    addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId, flags, serviceSkuCodes, dealposOrderNumber);
   };
 
   const updateTicketStatus = (
@@ -299,12 +300,13 @@ function App() {
     phone?: string,
     serviceSkuCodes?: string[],
     flags?: flag_type[],
+    dealposOrderNumber?: string,
   ) => {
     if (isActionProhibitedForAdmin(id)) {
       console.warn("Action blocked: ticket is locked/frozen");
       return;
     }
-    connectTicketToDealposOrderIdInCloud(id, dealposOrderId, customerName, phone, serviceSkuCodes, flags);
+    connectTicketToDealposOrderIdInCloud(id, dealposOrderId, customerName, phone, serviceSkuCodes, flags, dealposOrderNumber);
   };
 
   // Settings Handlers

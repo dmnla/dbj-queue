@@ -22,6 +22,11 @@ import {
 import { Ticket, MechanicDefinition, Branch, flag_type } from "../types";
 import { updateTicketInCloud, updateOperationalConfigInCloud, isTicketExcludedFromFollowUp } from "../services/ticketService";
 
+const normalizeOrderId = (id: string | null | undefined): string => {
+  if (!id) return "";
+  return String(id).trim().replace(/^#+/, "").toLowerCase();
+};
+
 interface DebriefModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -159,6 +164,8 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
         throw new Error("Format invoice salah atau tidak ditemukan.");
       }
 
+      const formattedNum = String(num).startsWith("#") ? String(num) : `#${String(num)}`;
+
       setStep3InvoiceSearchResult(prev => ({
         ...prev,
         [ticketId]: {
@@ -171,7 +178,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       
       setReconcileInputs(prev => ({
         ...prev,
-        [ticketId]: num
+        [ticketId]: formattedNum
       }));
 
     } catch (err: any) {
@@ -294,16 +301,50 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
           if (res.ok) {
             const data = await res.json();
             const rawData = data.Data || data.data || [];
-            // Remove duplicates
-            const groups: any[] = [];
-            const seen = new Set();
+            
+            // Group variants of same OrderID together exactly like Modals.tsx
+            const groups: { [orderId: string]: any } = {};
+            const seenItems = new Set<string>();
+
             for (const entry of rawData) {
-              if (!seen.has(entry.OrderID)) {
-                seen.add(entry.OrderID);
-                groups.push(entry);
+              const rawNum = entry.Number || "";
+              const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
+              const orderId = formattedNum || entry.OrderID;
+              if (!orderId) continue;
+
+              if (!groups[orderId]) {
+                groups[orderId] = {
+                  OrderID: orderId,
+                  Customer: entry.Customer || "UNKNOWN",
+                  Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
+                  ParkLabel: entry.ParkLabel || "",
+                  Created: entry.Created || "",
+                  Number: entry.Number || "",
+                  Note: entry.Note || "",
+                  Variants: [],
+                };
+              }
+
+              if (entry.Variants && Array.isArray(entry.Variants)) {
+                for (const variant of entry.Variants) {
+                  const variantUniq = `${orderId}_${variant.ItemID || variant.Code || variant.Name}`;
+                  if (!seenItems.has(variantUniq)) {
+                    seenItems.add(variantUniq);
+                    groups[orderId].Variants.push(variant);
+                  }
+                }
               }
             }
-            setDealposOrders(groups);
+
+            const groupedList = Object.values(groups).filter((g: any) => {
+              return g.Variants.some((v: any) => {
+                const code = String(v.Code || "").trim().toUpperCase();
+                const itemId = String(v.ItemID || "").trim().toUpperCase();
+                return code.startsWith("DBJS") || itemId.startsWith("DBJS");
+              });
+            });
+
+            setDealposOrders(groupedList);
           }
         } catch (e) {
           console.warn("Failed fetching dealpos orders for debrief", e);
@@ -375,12 +416,42 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     const currentFlags = t.flags || [];
     const updatedFlags = [...currentFlags];
-    if (!updatedFlags.includes("TELAT_UPDATE_ANTRIAN" as any)) {
-      updatedFlags.push("TELAT_UPDATE_ANTRIAN" as any);
+
+    // Find the DealPOS order to check its Created timestamp
+    const matchedOrder = dealposOrders.find(o => o.OrderID === orderId);
+    let shouldFlagTelat = true; // Fallback to true if order not found
+
+    if (matchedOrder && matchedOrder.Created) {
+      const createdTimestamp = new Date(matchedOrder.Created).getTime();
+      const referenceTime = t.timestamps?.arrival 
+        ? new Date(t.timestamps.arrival).getTime()
+        : Date.now();
+      const diffMs = referenceTime - createdTimestamp;
+      const diffMinutes = diffMs / (1000 * 60);
+      shouldFlagTelat = diffMinutes > 15;
+    }
+
+    if (shouldFlagTelat) {
+      if (!updatedFlags.includes("TELAT_UPDATE_ANTRIAN" as any)) {
+        updatedFlags.push("TELAT_UPDATE_ANTRIAN" as any);
+      }
+    } else {
+      const idx = updatedFlags.indexOf("TELAT_UPDATE_ANTRIAN" as any);
+      if (idx !== -1) {
+        updatedFlags.splice(idx, 1);
+      }
+    }
+
+    let orderNum = "";
+    if (matchedOrder) {
+      orderNum = matchedOrder.Number || "";
+    } else if (orderId && orderId.includes('.')) {
+      orderNum = orderId.replace(/^#+/, "");
     }
 
     await updateTicketInCloud(ticketId, {
       dealposOrderId: orderId,
+      dealposOrderNumber: orderNum,
       flags: updatedFlags
     });
 
@@ -1128,31 +1199,66 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                       const isPreSelected = rawQ.startsWith("#");
                                       const q = isPreSelected ? "" : rawQ.toLowerCase().trim();
                                       
-                                      const matches = dealposOrders.filter(o => 
-                                        !q ||
-                                        (o.Number || "").toLowerCase().includes(q) ||
-                                        (o.Customer || "").toLowerCase().includes(q) ||
-                                        (o.ParkLabel || "").toLowerCase().includes(q)
-                                      );
+                                      const dealposTicketCounts: { [orderId: string]: number } = {};
+                                      (tickets || []).forEach((t: any) => {
+                                        if (t.dealposOrderId) {
+                                          const key = normalizeOrderId(t.dealposOrderId);
+                                          dealposTicketCounts[key] = (dealposTicketCounts[key] || 0) + 1;
+                                        }
+                                      });
+
+                                      const matches = dealposOrders.filter(o => {
+                                        if (q) {
+                                          const matchesQuery = (o.Number || "").toLowerCase().includes(q) ||
+                                            (o.Customer || "").toLowerCase().includes(q) ||
+                                            (o.ParkLabel || "").toLowerCase().includes(q);
+                                          if (!matchesQuery) return false;
+                                        }
+
+                                        let totalAllowedTickets = 0;
+                                        if (o.Variants) {
+                                          o.Variants.forEach((v: any) => {
+                                            const code = v.Code || "";
+                                            const itemId = v.ItemID || "";
+                                            if (code.startsWith("DBJS") || itemId.startsWith("DBJS")) {
+                                              const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
+                                              totalAllowedTickets += qty;
+                                            }
+                                          });
+                                        }
+                                        if (totalAllowedTickets === 0) totalAllowedTickets = 1;
+
+                                        const normGroupID = normalizeOrderId(o.OrderID);
+                                        const currentCount = dealposTicketCounts[normGroupID] || 0;
+
+                                        if (normalizeOrderId(reconcileInputs[ticket.id]) === normGroupID) {
+                                          return true;
+                                        }
+
+                                        return currentCount < totalAllowedTickets;
+                                      });
                                       
                                       if (matches.length === 0) {
                                         return <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">Tidak ada kecocokan</div>;
                                       }
-                                      return matches.map(o => (
-                                        <button
-                                          key={o.OrderID}
-                                          type="button"
-                                          onClick={() => {
-                                            setReconcileInputs(prev => ({ ...prev, [ticket.id]: o.OrderID }));
-                                            setStep3Searches(prev => ({ ...prev, [ticket.id]: `#${o.Number} - ${o.Customer || o.ParkLabel || "No Name"}` }));
-                                            setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: false }));
-                                          }}
-                                          className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
-                                        >
-                                          <span>#{o.Number} - {o.Customer || o.ParkLabel || "No Name"}</span>
-                                          <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
-                                        </button>
-                                      ));
+                                      return matches.map(o => {
+                                        const dispId = String(o.OrderID).startsWith("#") ? String(o.OrderID) : `#${String(o.OrderID)}`;
+                                        return (
+                                          <button
+                                            key={o.OrderID}
+                                            type="button"
+                                            onClick={() => {
+                                              setReconcileInputs(prev => ({ ...prev, [ticket.id]: o.OrderID }));
+                                              setStep3Searches(prev => ({ ...prev, [ticket.id]: `${dispId} - ${o.Customer || o.ParkLabel || "No Name"}` }));
+                                              setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: false }));
+                                            }}
+                                            className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
+                                          >
+                                            <span>{dispId} - {o.Customer || o.ParkLabel || "No Name"}</span>
+                                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
+                                          </button>
+                                        );
+                                      });
                                     })()}
                                   </div>
                                 </>

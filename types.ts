@@ -61,6 +61,7 @@ export interface Ticket {
   followUpPhotoUrl?: string;
   lastStatusChange?: string;
   dealposOrderId?: string;
+  dealposOrderNumber?: string;
   serviceSkuCodes?: string[];
   flags?: flag_type[];
   flag_types?: flag_type[];

@@ -384,9 +384,11 @@ export const addTicketToCloud = async (
   dealposOrderId?: string,
   flags?: flag_type[],
   serviceSkuCodes?: string[],
+  dealposOrderNumber?: string,
 ) => {
   if (!db) return;
-  const uniqueDocId = `T-${Date.now()}`;
+  const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const uniqueDocId = `T-${Date.now()}-${randomSuffix}`;
   const timestamp = new Date().toISOString();
   const cleanName = customerName.trim();
   const cleanPhone = phone.trim();
@@ -470,6 +472,7 @@ export const addTicketToCloud = async (
           finished: null,
         },
         dealposOrderId: dealposOrderId || null,
+        dealposOrderNumber: dealposOrderNumber || null,
         serviceSkuCodes: serviceSkuCodes || null,
         flags: flags || null,
         flag_types: flags || null,
@@ -652,6 +655,7 @@ export const connectTicketToDealposOrderIdInCloud = async (
   phone?: string,
   serviceSkuCodes?: string[],
   flags?: flag_type[],
+  dealposOrderNumber?: string,
 ) => {
   if (!db) return;
   const docRef = doc(db, "tickets", id);
@@ -659,6 +663,7 @@ export const connectTicketToDealposOrderIdInCloud = async (
   if (customerName) updates.customerName = customerName;
   if (phone) updates.phone = phone;
   if (serviceSkuCodes) updates.serviceSkuCodes = serviceSkuCodes;
+  if (dealposOrderNumber) updates.dealposOrderNumber = dealposOrderNumber;
 
   if (flags && flags.length > 0) {
     try {
