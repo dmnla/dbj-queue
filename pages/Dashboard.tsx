@@ -47,6 +47,7 @@ interface DashboardProps {
     dealposOrderId?: string,
     flags?: flag_type[],
     serviceSkuCodes?: string[],
+    dealposOrderNumber?: string,
   ) => void;
   updateTicketStatus: (
     id: string,
@@ -69,6 +70,7 @@ interface DashboardProps {
     phone?: string,
     serviceSkuCodes?: string[],
     flags?: flag_type[],
+    dealposOrderNumber?: string,
   ) => void;
   currentBranch: any;
   ignoredDealposIds?: string[];
@@ -565,7 +567,10 @@ const Dashboard: React.FC<DashboardProps> = ({
             warrantyServices,
             notes,
             ticket.customerId,
-            ticket.dealposOrderId
+            ticket.dealposOrderId,
+            undefined,
+            undefined,
+            ticket.dealposOrderNumber
           );
         }}
       />

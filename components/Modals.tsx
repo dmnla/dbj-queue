@@ -441,7 +441,7 @@ export const CustomerSearchInput = ({
       const seenItems = new Set<string>();
 
       for (const entry of rawData) {
-        const rawNum = entry.Number || "";
+        const rawNum = entry.Number || entry.ParkLabel || "";
         const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
         const orderId = formattedNum || entry.OrderID;
         if (!orderId) continue;
@@ -453,7 +453,7 @@ export const CustomerSearchInput = ({
             Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
             ParkLabel: entry.ParkLabel || "",
             Created: entry.Created || "",
-            Number: entry.Number || "",
+            Number: entry.Number || entry.ParkLabel || "",
             Note: entry.Note || "",
             Variants: [],
           };
@@ -1684,8 +1684,19 @@ export const EditServicesModal = ({
             <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest font-mono">Status Reconsiled:</span>
             <span className="text-xs font-black bg-blue-100 text-blue-800 px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
               🔗 DealPOS {(() => {
-                const val = ticket.dealposOrderNumber || ticket.dealposOrderId || "";
-                return val.startsWith("#") ? val : `#${val}`;
+                const num = ticket.dealposOrderNumber;
+                const id = ticket.dealposOrderId;
+                if (num && String(num).trim()) {
+                  const val = String(num).trim();
+                  const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                  if (!isGuid) return val.replace(/^#+/, "");
+                }
+                if (id && String(id).trim()) {
+                  const val = String(id).trim();
+                  const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                  if (!isGuid) return val.replace(/^#+/, "");
+                }
+                return "Terhubung";
               })()}
             </span>
           </div>

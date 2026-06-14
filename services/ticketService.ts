@@ -451,6 +451,15 @@ export const addTicketToCloud = async (
         });
       }
 
+      let finalOrderNumber = dealposOrderNumber || "";
+      if (!finalOrderNumber && dealposOrderId) {
+        const cleanId = dealposOrderId.replace(/^#+/, "");
+        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.length > 20;
+        if (!isGuid) {
+          finalOrderNumber = cleanId;
+        }
+      }
+
       // Create Ticket
       transaction.set(ticketRef, {
         id: uniqueDocId,
@@ -472,7 +481,7 @@ export const addTicketToCloud = async (
           finished: null,
         },
         dealposOrderId: dealposOrderId || null,
-        dealposOrderNumber: dealposOrderNumber || null,
+        dealposOrderNumber: finalOrderNumber || null,
         serviceSkuCodes: serviceSkuCodes || null,
         flags: flags || null,
         flag_types: flags || null,
@@ -663,7 +672,18 @@ export const connectTicketToDealposOrderIdInCloud = async (
   if (customerName) updates.customerName = customerName;
   if (phone) updates.phone = phone;
   if (serviceSkuCodes) updates.serviceSkuCodes = serviceSkuCodes;
-  if (dealposOrderNumber) updates.dealposOrderNumber = dealposOrderNumber;
+  
+  let finalOrderNumber = dealposOrderNumber || "";
+  if (!finalOrderNumber && dealposOrderId) {
+    const cleanId = dealposOrderId.replace(/^#+/, "");
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.length > 20;
+    if (!isGuid) {
+      finalOrderNumber = cleanId;
+    }
+  }
+  if (finalOrderNumber) {
+    updates.dealposOrderNumber = finalOrderNumber;
+  }
 
   if (flags && flags.length > 0) {
     try {

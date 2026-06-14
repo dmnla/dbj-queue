@@ -307,7 +307,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
             const seenItems = new Set<string>();
 
             for (const entry of rawData) {
-              const rawNum = entry.Number || "";
+              const rawNum = entry.Number || entry.ParkLabel || "";
               const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
               const orderId = formattedNum || entry.OrderID;
               if (!orderId) continue;
@@ -319,7 +319,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
                   ParkLabel: entry.ParkLabel || "",
                   Created: entry.Created || "",
-                  Number: entry.Number || "",
+                  Number: entry.Number || entry.ParkLabel || "",
                   Note: entry.Note || "",
                   Variants: [],
                 };
@@ -444,9 +444,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     let orderNum = "";
     if (matchedOrder) {
-      orderNum = matchedOrder.Number || "";
-    } else if (orderId && orderId.includes('.')) {
-      orderNum = orderId.replace(/^#+/, "");
+      orderNum = matchedOrder.Number || matchedOrder.ParkLabel || "";
+    }
+    if (!orderNum && orderId) {
+      const cleanId = orderId.replace(/^#+/, "");
+      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.length > 20;
+      if (!isGuid) {
+        orderNum = cleanId;
+      }
     }
 
     await updateTicketInCloud(ticketId, {
@@ -1139,7 +1144,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                       <div className="w-full md:w-96 flex flex-col gap-4 border-t pt-4 md:border-t-0 md:pt-0 md:pl-5 md:border-l border-slate-150 shrink-0">
                         {reconcileSaved[ticket.id] ? (
                           <div className="flex items-center justify-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-3 rounded-xl text-xs font-black uppercase border border-emerald-200">
-                            <Check size={16} /> Tersimpan ({reconcileInputs[ticket.id]})
+                            <Check size={16} /> Tersimpan ({reconcileInputs[ticket.id]?.replace(/^#+/, "")})
                           </div>
                         ) : (
                           <div className="space-y-4">
@@ -1298,7 +1303,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   {step3InvoiceSearchResult[ticket.id].found && (
                                     <div className="text-emerald-600 uppercase flex flex-col gap-0.5">
                                       <span className="font-black">✅ INVOICE DITEMUKAN:</span>
-                                      <span className="text-slate-800 font-bold">No: #{step3InvoiceSearchResult[ticket.id].Number}</span>
+                                      <span className="text-slate-800 font-bold">No: {step3InvoiceSearchResult[ticket.id].Number}</span>
                                       <span className="text-slate-800 font-bold">Nama: {step3InvoiceSearchResult[ticket.id].CustomerName.toUpperCase()}</span>
                                     </div>
                                   )}
@@ -1310,7 +1315,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                             {reconcileInputs[ticket.id] && (
                               <div className="pt-2 flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-dashed border-slate-200">
                                 <div className="text-[10px] font-black text-slate-600 uppercase truncate">
-                                  ID: <span className="font-mono text-blue-600">{reconcileInputs[ticket.id]}</span>
+                                  No: <span className="font-mono text-blue-600">{reconcileInputs[ticket.id]?.replace(/^#+/, "")}</span>
                                 </div>
                                 <button
                                   onClick={() => handleSaveReconcile(ticket.id)}

@@ -107,8 +107,19 @@ const TicketCard: React.FC<TicketCardProps> = ({
             {!locked && ticket.dealposOrderId && (
               <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-tight whitespace-nowrap">
                 DealPOS {(() => {
-                  const val = ticket.dealposOrderNumber || ticket.dealposOrderId || "";
-                  return val.startsWith("#") ? val : `#${val}`;
+                  const num = ticket.dealposOrderNumber;
+                  const id = ticket.dealposOrderId;
+                  if (num && String(num).trim()) {
+                    const val = String(num).trim();
+                    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                    if (!isGuid) return val.replace(/^#+/, "");
+                  }
+                  if (id && String(id).trim()) {
+                    const val = String(id).trim();
+                    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                    if (!isGuid) return val.replace(/^#+/, "");
+                  }
+                  return "Terhubung";
                 })()}
               </span>
             )}

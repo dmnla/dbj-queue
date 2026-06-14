@@ -118,6 +118,8 @@ function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [storageSlots, setStorageSlots] = useState<StorageSlot[]>([]);
   const [ignoredDealposIds, setIgnoredDealposIds] = useState<string[]>([]);
+  const [dealposOrders, setDealposOrders] = useState<any[]>([]);
+  const backfilledTicketIdsRef = useRef<Set<string>>(new Set());
 
   const [isBengkelOpen, setIsBengkelOpen] = useState(true);
   const [isOvertimeActive, setIsOvertimeActive] = useState(false);
@@ -181,6 +183,102 @@ function App() {
       unsubscribeOps();
     };
   }, [currentBranch]);
+
+  // Fetch DealPOS parked orders for backfilling GUIDs
+  useEffect(() => {
+    if (!currentBranch) {
+      setDealposOrders([]);
+      return;
+    }
+    const fetchOrders = async () => {
+      try {
+        const res = await fetch(`/api/dealpos?branch=${currentBranch}`);
+        if (res.ok) {
+          const rawData = await res.json();
+          const formatted: any[] = [];
+          const seenItems = new Set<string>();
+
+          for (const entry of (Array.isArray(rawData) ? rawData : [])) {
+            const rawNum = entry.Number || entry.ParkLabel || "";
+            const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
+            const orderId = formattedNum || entry.OrderID;
+            if (!orderId) continue;
+
+            const key = `${orderId}-${entry.Created}`;
+            if (seenItems.has(key)) continue;
+            seenItems.add(key);
+
+            formatted.push({
+              OrderID: entry.OrderID || "",
+              Customer: entry.Customer?.Name || entry.CustomerName || "Walk-In Customer",
+              Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
+              ParkLabel: entry.ParkLabel || "",
+              Created: entry.Created || "",
+              Number: entry.Number || entry.ParkLabel || "",
+              Note: entry.Note || "",
+              Variants: [],
+            });
+          }
+          setDealposOrders(formatted);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch DealPOS orders for root backfilling:", e);
+      }
+    };
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 180000);
+    return () => clearInterval(interval);
+  }, [currentBranch]);
+
+  // Backfill older tickets missing dealposOrderNumber
+  useEffect(() => {
+    if (!tickets || tickets.length === 0) return;
+
+    tickets.forEach(async (t) => {
+      // 1. Must have a dealposOrderId
+      if (!t.dealposOrderId) return;
+
+      // 2. Must not have a valid dealposOrderNumber already
+      if (t.dealposOrderNumber && t.dealposOrderNumber !== "Terhubung") return;
+
+      // 3. Skip if we already attempted to backfill this ticket in this session
+      if (backfilledTicketIdsRef.current.has(t.id)) return;
+
+      const id = String(t.dealposOrderId).trim();
+      const cleanId = id.replace(/^#+/, "");
+      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.length > 20;
+
+      let targetOrderNumber = "";
+
+      if (!isGuid && cleanId) {
+        // Simple case: dealposOrderId itself contains the clean human-readable order number (e.g. 26.06.00206)
+        targetOrderNumber = cleanId;
+      } else if (isGuid && dealposOrders.length > 0) {
+        // GUID case: let's match it against the fetched dealposOrders
+        const match = dealposOrders.find(o => o.OrderID === id);
+        if (match) {
+          const matchedNum = (match.Number || match.ParkLabel || "").replace(/^#+/, "").trim();
+          if (matchedNum) {
+            targetOrderNumber = matchedNum;
+          }
+        }
+      }
+
+      if (targetOrderNumber && targetOrderNumber !== t.dealposOrderNumber) {
+        // Record that we are backfilling this ticket ID to prevent double-writes
+        backfilledTicketIdsRef.current.add(t.id);
+        try {
+          console.log(`[Backfill] Ticket ${t.id} -> setting dealposOrderNumber to ${targetOrderNumber}`);
+          await updateTicketInCloud(t.id, {
+            dealposOrderNumber: targetOrderNumber
+          });
+        } catch (e) {
+          console.error(`[Backfill] Failed to update ticket ${t.id}:`, e);
+          backfilledTicketIdsRef.current.delete(t.id);
+        }
+      }
+    });
+  }, [tickets, dealposOrders]);
 
 
 
