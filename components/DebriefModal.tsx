@@ -1,26 +1,30 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  X, 
-  ChevronRight, 
-  ChevronLeft, 
-  AlertCircle, 
-  Check, 
-  Link, 
-  FileText, 
-  Clipboard, 
-  User, 
-  CheckSquare, 
-  Plus, 
-  Users, 
-  Clock, 
-  Ban, 
-  Play, 
+import {
+  X,
+  ChevronRight,
+  ChevronLeft,
+  AlertCircle,
+  Check,
+  Link,
+  FileText,
+  Clipboard,
+  User,
+  CheckSquare,
+  Plus,
+  Users,
+  Clock,
+  Ban,
+  Play,
   Wrench,
   Search,
-  ChevronDown
+  ChevronDown,
 } from "lucide-react";
 import { Ticket, MechanicDefinition, Branch, flag_type } from "../types";
-import { updateTicketInCloud, updateOperationalConfigInCloud, isTicketExcludedFromFollowUp } from "../services/ticketService";
+import {
+  updateTicketInCloud,
+  updateOperationalConfigInCloud,
+  isTicketExcludedFromFollowUp,
+} from "../services/ticketService";
 
 const normalizeOrderId = (id: string | null | undefined): string => {
   if (!id) return "";
@@ -48,7 +52,7 @@ export const calculateTicketDuration = (
   isDebriefInProgress: boolean,
   debriefFrozenAt: string | null,
   overtimeTicketIds: string[],
-  overtimeStoppedAt?: string | null
+  overtimeStoppedAt?: string | null,
 ): string => {
   let startTimeStr = t.lastStatusChange;
   if (!startTimeStr) {
@@ -57,9 +61,11 @@ export const calculateTicketDuration = (
     } else if (t.status === "active") {
       startTimeStr = t.timestamps.called || t.timestamps.arrival;
     } else if (t.status === "ready") {
-      startTimeStr = t.timestamps.ready || t.timestamps.called || t.timestamps.arrival;
+      startTimeStr =
+        t.timestamps.ready || t.timestamps.called || t.timestamps.arrival;
     } else if (t.status === "taken") {
-      startTimeStr = t.timestamps.taken || t.timestamps.finished || t.timestamps.arrival;
+      startTimeStr =
+        t.timestamps.taken || t.timestamps.finished || t.timestamps.arrival;
     } else if (t.status === "done") {
       startTimeStr = t.timestamps.finished || t.timestamps.arrival;
     } else {
@@ -67,7 +73,9 @@ export const calculateTicketDuration = (
     }
   }
 
-  const startMs = startTimeStr ? new Date(startTimeStr).getTime() : new Date().getTime();
+  const startMs = startTimeStr
+    ? new Date(startTimeStr).getTime()
+    : new Date().getTime();
   let endMs = new Date().getTime();
 
   // If ticket status is active or pending, freeze time calculation if conditions apply
@@ -125,11 +133,21 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   const [dealposOrders, setDealposOrders] = useState<any[]>([]);
   const [isLoadingDealpos, setIsLoadingDealpos] = useState(false);
   const [dealposSearchTerm, setDealposSearchTerm] = useState("");
-  const [reconcileInputs, setReconcileInputs] = useState<{ [ticketId: string]: string }>({});
-  const [reconcileSaved, setReconcileSaved] = useState<{ [ticketId: string]: boolean }>({});
-  const [step3Searches, setStep3Searches] = useState<{ [ticketId: string]: string }>({});
-  const [step3DropdownOpen, setStep3DropdownOpen] = useState<{ [ticketId: string]: boolean }>({});
-  const [step3ManualInvoice, setStep3ManualInvoice] = useState<{ [ticketId: string]: string }>({});
+  const [reconcileInputs, setReconcileInputs] = useState<{
+    [ticketId: string]: string;
+  }>({});
+  const [reconcileSaved, setReconcileSaved] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
+  const [step3Searches, setStep3Searches] = useState<{
+    [ticketId: string]: string;
+  }>({});
+  const [step3DropdownOpen, setStep3DropdownOpen] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
+  const [step3ManualInvoice, setStep3ManualInvoice] = useState<{
+    [ticketId: string]: string;
+  }>({});
   const [step3InvoiceSearchResult, setStep3InvoiceSearchResult] = useState<{
     [ticketId: string]: {
       Number: string;
@@ -144,73 +162,97 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     const invInput = step3ManualInvoice[ticketId]?.trim() || "";
     if (!invInput) return;
 
-    setStep3InvoiceSearchResult(prev => ({
+    setStep3InvoiceSearchResult((prev) => ({
       ...prev,
-      [ticketId]: { Number: "", CustomerName: "", loading: true, found: false }
+      [ticketId]: { Number: "", CustomerName: "", loading: true, found: false },
     }));
 
     try {
       const cleanNum = invInput.replace(/^#+/, "").trim();
-      const res = await fetch(`/api/dealpos?branch=${branch}&invoiceNumber=${encodeURIComponent(cleanNum)}`);
+      const res = await fetch(
+        `/api/dealpos?branch=${branch}&invoiceNumber=${encodeURIComponent(cleanNum)}`,
+      );
       if (!res.ok) {
-        throw new Error(`Invoice tidak ditemukan atau DealPOS error (Status ${res.status})`);
+        throw new Error(
+          `Invoice tidak ditemukan atau DealPOS error (Status ${res.status})`,
+        );
       }
 
       const data = await res.json();
       const num = data.Number;
-      const customerName = data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
+      const customerName =
+        data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
 
       if (!num) {
         throw new Error("Format invoice salah atau tidak ditemukan.");
       }
 
-      const formattedNum = String(num).startsWith("#") ? String(num) : `#${String(num)}`;
+      const formattedNum = String(num).startsWith("#")
+        ? String(num)
+        : `#${String(num)}`;
 
-      setStep3InvoiceSearchResult(prev => ({
+      setStep3InvoiceSearchResult((prev) => ({
         ...prev,
         [ticketId]: {
           Number: num,
           CustomerName: customerName,
           loading: false,
-          found: true
-        }
-      }));
-      
-      setReconcileInputs(prev => ({
-        ...prev,
-        [ticketId]: formattedNum
+          found: true,
+        },
       }));
 
+      setReconcileInputs((prev) => ({
+        ...prev,
+        [ticketId]: formattedNum,
+      }));
     } catch (err: any) {
-      setStep3InvoiceSearchResult(prev => ({
+      setStep3InvoiceSearchResult((prev) => ({
         ...prev,
         [ticketId]: {
           Number: "",
           CustomerName: "",
           loading: false,
           found: false,
-          error: err.message || "Gagal menghubungi DealPOS"
-        }
+          error: err.message || "Gagal menghubungi DealPOS",
+        },
       }));
     }
   };
 
   // Step 4 States: Assign Mechanics & Activate waiting
-  const [selectedMechanics, setSelectedMechanics] = useState<{ [ticketId: string]: string }>({});
-  const [serviceSaved, setServiceSaved] = useState<{ [ticketId: string]: boolean }>({});
+  const [selectedMechanics, setSelectedMechanics] = useState<{
+    [ticketId: string]: string;
+  }>({});
+  const [serviceSaved, setServiceSaved] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
 
   // Step 5 States: Anomaly reason
-  const [anomalyReasons, setAnomalyReasons] = useState<{ [ticketId: string]: string }>({});
-  const [anomalyTelatUpdate, setAnomalyTelatUpdate] = useState<{ [ticketId: string]: boolean }>({});
-  const [anomalySaved, setAnomalySaved] = useState<{ [ticketId: string]: boolean }>({});
+  const [anomalyReasons, setAnomalyReasons] = useState<{
+    [ticketId: string]: string;
+  }>({});
+  const [anomalyTelatUpdate, setAnomalyTelatUpdate] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
+  const [anomalySaved, setAnomalySaved] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
 
   // Step 6 States: Physical Receipt checklist
-  const [missingReceipts, setMissingReceipts] = useState<{ [ticketId: string]: boolean }>({});
-  const [receiptSaved, setReceiptSaved] = useState<{ [ticketId: string]: boolean }>({});
+  const [missingReceipts, setMissingReceipts] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
+  const [receiptSaved, setReceiptSaved] = useState<{
+    [ticketId: string]: boolean;
+  }>({});
 
   // Step 7 States: Overtime
-  const [hasOvertimeToday, setHasOvertimeToday] = useState<boolean | null>(null);
-  const [selectedOvertimeTickets, setSelectedOvertimeTickets] = useState<string[]>([]);
+  const [hasOvertimeToday, setHasOvertimeToday] = useState<boolean | null>(
+    null,
+  );
+  const [selectedOvertimeTickets, setSelectedOvertimeTickets] = useState<
+    string[]
+  >([]);
   const [confirmOvertimeSelesai, setConfirmOvertimeSelesai] = useState(false);
   const [monthlyCopied, setMonthlyCopied] = useState(false);
 
@@ -219,23 +261,41 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   }, []);
 
   const eligibleOvertimeTickets = useMemo(() => {
-    return tickets.filter(t => t.branch === branch && (t.status === "waiting" || t.status === "active" || t.status === "pending"));
+    return tickets.filter(
+      (t) =>
+        t.branch === branch &&
+        (t.status === "waiting" ||
+          t.status === "active" ||
+          t.status === "pending"),
+    );
   }, [tickets, branch]);
 
   const isOvertimeSelectionValid = useMemo(() => {
     if (selectedOvertimeTickets.length === 0) return false;
-    const selectedWaiting = tickets.filter(t => t.branch === branch && selectedOvertimeTickets.includes(t.id) && t.status === "waiting");
-    return !selectedWaiting.some(t => !t.overtimeMechanic);
+    const selectedWaiting = tickets.filter(
+      (t) =>
+        t.branch === branch &&
+        selectedOvertimeTickets.includes(t.id) &&
+        t.status === "waiting",
+    );
+    return !selectedWaiting.some((t) => !t.overtimeMechanic);
   }, [tickets, selectedOvertimeTickets, branch]);
 
   // Load manual tickets needing reconcile
   const manualTickets = useMemo(() => {
-    return tickets.filter(t => !t.dealposOrderId && (t.status === "waiting" || t.status === "active" || t.status === "pending" || t.status === "ready"));
+    return tickets.filter(
+      (t) =>
+        !t.dealposOrderId &&
+        (t.status === "waiting" ||
+          t.status === "active" ||
+          t.status === "pending" ||
+          t.status === "ready"),
+    );
   }, [tickets]);
 
   // Load waiting tickets needing service review
   const waitingTickets = useMemo(() => {
-    return tickets.filter(t => t.status === "waiting");
+    return tickets.filter((t) => t.status === "waiting");
   }, [tickets]);
 
   // Load anomaly tickets
@@ -243,7 +303,11 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     if (!dateStr) return false;
     const d = new Date(dateStr);
     const today = new Date();
-    return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    return (
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear()
+    );
   };
 
   const isLateAfternoonStart = (t: Ticket) => {
@@ -256,9 +320,11 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   };
 
   const anomalyTickets = useMemo(() => {
-    return tickets.filter(t => {
+    return tickets.filter((t) => {
       const hasAnomalyFlag = t.flags?.includes("ANOMALI_DURASI_SERVICE" as any);
-      const isSelesaiHariIni = (t.status === "ready" || t.status === "done" || t.status === "taken") && (isToday(t.timestamps.ready));
+      const isSelesaiHariIni =
+        (t.status === "ready" || t.status === "done" || t.status === "taken") &&
+        isToday(t.timestamps.ready);
       const isSelesaiAtauActive = t.status === "active" || isSelesaiHariIni;
       const isTraditionalAnomaly = hasAnomalyFlag && isSelesaiAtauActive;
 
@@ -270,25 +336,26 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
   // Load ready tickets for physical receipt check
   const readyTickets = useMemo(() => {
-    return tickets.filter(t => t.status === "ready");
+    return tickets.filter((t) => t.status === "ready");
   }, [tickets]);
 
   const unclearedManualTickets = useMemo(() => {
-    return manualTickets.filter(t => !reconcileSaved[t.id]);
+    return manualTickets.filter((t) => !reconcileSaved[t.id]);
   }, [manualTickets, reconcileSaved]);
 
   const unclearedAnomalies = useMemo(() => {
-    return anomalyTickets.filter(t => {
-      const isSavedSaved = anomalySaved[t.id] || 
-        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) || 
-        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) || 
+    return anomalyTickets.filter((t) => {
+      const isSavedSaved =
+        anomalySaved[t.id] ||
+        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) ||
+        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) ||
         t.notes?.includes("[Reason:");
       return !isSavedSaved;
     });
   }, [anomalyTickets, anomalySaved]);
 
   const unclearedReceipts = useMemo(() => {
-    return readyTickets.filter(t => !receiptSaved[t.id]);
+    return readyTickets.filter((t) => !receiptSaved[t.id]);
   }, [readyTickets, receiptSaved]);
 
   // Fetch Dealpos open parked orders for step 3
@@ -301,22 +368,32 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
           if (res.ok) {
             const data = await res.json();
             const rawData = data.Data || data.data || [];
-            
+
             // Group variants of same OrderID together exactly like Modals.tsx
             const groups: { [orderId: string]: any } = {};
             const seenItems = new Set<string>();
 
             for (const entry of rawData) {
               const rawNum = entry.Number || entry.ParkLabel || "";
-              const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
+              const formattedNum = rawNum
+                ? String(rawNum).startsWith("#")
+                  ? String(rawNum)
+                  : `#${String(rawNum)}`
+                : "";
               const orderId = formattedNum || entry.OrderID;
               if (!orderId) continue;
 
               if (!groups[orderId]) {
                 groups[orderId] = {
                   OrderID: orderId,
+                  dealposGuid: entry.OrderID || "",
                   Customer: entry.Customer || "UNKNOWN",
-                  Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
+                  Phone:
+                    entry.Phone ||
+                    entry.Contact ||
+                    entry.CustomerContact ||
+                    entry.CustomerMobile ||
+                    "",
                   ParkLabel: entry.ParkLabel || "",
                   Created: entry.Created || "",
                   Number: entry.Number || entry.ParkLabel || "",
@@ -338,8 +415,12 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
             const groupedList = Object.values(groups).filter((g: any) => {
               return g.Variants.some((v: any) => {
-                const code = String(v.Code || "").trim().toUpperCase();
-                const itemId = String(v.ItemID || "").trim().toUpperCase();
+                const code = String(v.Code || "")
+                  .trim()
+                  .toUpperCase();
+                const itemId = String(v.ItemID || "")
+                  .trim()
+                  .toUpperCase();
                 return code.startsWith("DBJS") || itemId.startsWith("DBJS");
               });
             });
@@ -375,7 +456,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     const nowStr = new Date().toISOString();
     await updateOperationalConfigInCloud(branch, {
       isDebriefInProgress: true,
-      debriefFrozenAt: nowStr
+      debriefFrozenAt: nowStr,
     });
     setStep(2);
   };
@@ -383,19 +464,25 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   const handleNext = () => {
     if (step === 3) {
       if (unclearedManualTickets.length > 0) {
-        alert(`Harap selesaikan rekonsiliasi untuk semua kartu manual (${unclearedManualTickets.length} tersisa) sebelum melanjutkan.`);
+        alert(
+          `Harap selesaikan rekonsiliasi untuk semua kartu manual (${unclearedManualTickets.length} tersisa) sebelum melanjutkan.`,
+        );
         return;
       }
     }
     if (step === 5) {
       if (unclearedAnomalies.length > 0) {
-        alert(`Harap simpan alasan anomali untuk semua kartu (${unclearedAnomalies.length} tersisa) sebelum melanjutkan.`);
+        alert(
+          `Harap simpan alasan anomali untuk semua kartu (${unclearedAnomalies.length} tersisa) sebelum melanjutkan.`,
+        );
         return;
       }
     }
     if (step === 6) {
       if (unclearedReceipts.length > 0) {
-        alert(`Harap simpan konfirmasi resi fisik untuk semua kartu (${unclearedReceipts.length} tersisa) sebelum melanjutkan.`);
+        alert(
+          `Harap simpan konfirmasi resi fisik untuk semua kartu (${unclearedReceipts.length} tersisa) sebelum melanjutkan.`,
+        );
         return;
       }
     }
@@ -411,19 +498,19 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     const orderId = reconcileInputs[ticketId]?.trim();
     if (!orderId) return;
 
-    const t = tickets.find(x => x.id === ticketId);
+    const t = tickets.find((x) => x.id === ticketId);
     if (!t) return;
 
     const currentFlags = t.flags || [];
     const updatedFlags = [...currentFlags];
 
     // Find the DealPOS order to check its Created timestamp
-    const matchedOrder = dealposOrders.find(o => o.OrderID === orderId);
+    const matchedOrder = dealposOrders.find((o) => o.OrderID === orderId);
     let shouldFlagTelat = true; // Fallback to true if order not found
 
     if (matchedOrder && matchedOrder.Created) {
       const createdTimestamp = new Date(matchedOrder.Created).getTime();
-      const referenceTime = t.timestamps?.arrival 
+      const referenceTime = t.timestamps?.arrival
         ? new Date(t.timestamps.arrival).getTime()
         : Date.now();
       const diffMs = referenceTime - createdTimestamp;
@@ -448,7 +535,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     }
     if (!orderNum && orderId) {
       const cleanId = orderId.replace(/^#+/, "");
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.length > 20;
+      const isGuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          cleanId,
+        ) || cleanId.length > 20;
       if (!isGuid) {
         orderNum = cleanId;
       }
@@ -457,10 +547,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     await updateTicketInCloud(ticketId, {
       dealposOrderId: orderId,
       dealposOrderNumber: orderNum,
-      flags: updatedFlags
+      flags: updatedFlags,
     });
 
-    setReconcileSaved(prev => ({ ...prev, [ticketId]: true }));
+    setReconcileSaved((prev) => ({ ...prev, [ticketId]: true }));
   };
 
   // Step 4: Move waiting to Active & assign mechanic (TELAT_UPDATE_SERVICE)
@@ -468,7 +558,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     const mech = selectedMechanics[ticketId];
     if (!mech) return;
 
-    const t = tickets.find(x => x.id === ticketId);
+    const t = tickets.find((x) => x.id === ticketId);
     if (!t) return;
 
     const currentFlags = t.flags || [];
@@ -481,20 +571,20 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       status: "active",
       mechanic: mech,
       "timestamps.called": new Date().toISOString(),
-      flags: updatedFlags
+      flags: updatedFlags,
     });
 
-    setServiceSaved(prev => ({ ...prev, [ticketId]: true }));
+    setServiceSaved((prev) => ({ ...prev, [ticketId]: true }));
   };
 
   // Step 5: Save anomaly reasons (TELAT_UPDATE_SELESAI / TELAT_UPDATE_SERVICE)
   const handleSaveAnomaly = async (ticketId: string) => {
     const isTelat = anomalyTelatUpdate[ticketId];
     const userReason = anomalyReasons[ticketId]?.trim();
-    
+
     if (!isTelat && !userReason) return;
 
-    const t = tickets.find(x => x.id === ticketId);
+    const t = tickets.find((x) => x.id === ticketId);
     if (!t) return;
 
     const currentFlags = t.flags || [];
@@ -516,28 +606,28 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     }
 
     const savedReasonString = isTelat ? "Telat Update" : userReason;
-    const finalNotes = t.notes 
-      ? `${t.notes} | [Reason: ${savedReasonString}]` 
+    const finalNotes = t.notes
+      ? `${t.notes} | [Reason: ${savedReasonString}]`
       : `[Reason: ${savedReasonString}]`;
 
     await updateTicketInCloud(ticketId, {
       notes: finalNotes,
-      flags: updatedFlags
+      flags: updatedFlags,
     });
 
-    setAnomalySaved(prev => ({ ...prev, [ticketId]: true }));
+    setAnomalySaved((prev) => ({ ...prev, [ticketId]: true }));
   };
 
   // Step 6: Fizik checklist (RESI_HILANG)
   const handleSaveReceipt = async (ticketId: string) => {
     const isMissing = missingReceipts[ticketId];
 
-    const t = tickets.find(x => x.id === ticketId);
+    const t = tickets.find((x) => x.id === ticketId);
     if (!t) return;
 
     const currentFlags = t.flags || [];
     const updatedFlags = [...currentFlags];
-    
+
     if (isMissing) {
       if (!updatedFlags.includes("RESI_HILANG" as any)) {
         updatedFlags.push("RESI_HILANG" as any);
@@ -548,10 +638,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     }
 
     await updateTicketInCloud(ticketId, {
-      flags: updatedFlags
+      flags: updatedFlags,
     });
 
-    setReceiptSaved(prev => ({ ...prev, [ticketId]: true }));
+    setReceiptSaved((prev) => ({ ...prev, [ticketId]: true }));
   };
 
   // Step 7: Overtime submissions
@@ -572,7 +662,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
           isDebriefInProgress: false,
           debriefFrozenAt: null,
           overtimeTicketIds: selectedOvertimeTickets,
-          overtimeStoppedAt: null
+          overtimeStoppedAt: null,
         });
       } else {
         await updateOperationalConfigInCloud(branch, {
@@ -581,7 +671,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
           isDebriefInProgress: false,
           debriefFrozenAt: null,
           overtimeTicketIds: [],
-          overtimeStoppedAt: null
+          overtimeStoppedAt: null,
         });
       }
     } catch (e) {
@@ -615,35 +705,43 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     };
 
     // Filter today's branch tickets
-    const branchSpec = tickets.filter(t => t.branch === branch);
+    const branchSpec = tickets.filter((t) => t.branch === branch);
 
     // Filter with specific flags restricted to today's operations/activities to prevent accumulative across days
-    const countAntrian = branchSpec.filter(t => 
-      (t.flags?.includes("TELAT_UPDATE_ANTRIAN" as any) || t.flags?.includes("TELAT_UPDATE" as any)) && 
-      isToday(t.timestamps.arrival)
+    const countAntrian = branchSpec.filter(
+      (t) =>
+        (t.flags?.includes("TELAT_UPDATE_ANTRIAN" as any) ||
+          t.flags?.includes("TELAT_UPDATE" as any)) &&
+        isToday(t.timestamps.arrival),
     ).length;
 
-    const monthlyAntrian = branchSpec.filter(t => 
-      (t.flags?.includes("TELAT_UPDATE_ANTRIAN" as any) || t.flags?.includes("TELAT_UPDATE" as any)) && 
-      isWithinMonthlyCutoff(t.timestamps.arrival)
+    const monthlyAntrian = branchSpec.filter(
+      (t) =>
+        (t.flags?.includes("TELAT_UPDATE_ANTRIAN" as any) ||
+          t.flags?.includes("TELAT_UPDATE" as any)) &&
+        isWithinMonthlyCutoff(t.timestamps.arrival),
     ).length;
 
-    const countService = branchSpec.filter(t => 
-      t.flags?.includes("TELAT_UPDATE_SERVICE" as any) && 
-      (isToday(t.timestamps.called) || isToday(t.timestamps.arrival))
+    const countService = branchSpec.filter(
+      (t) =>
+        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) &&
+        (isToday(t.timestamps.called) || isToday(t.timestamps.arrival)),
     ).length;
 
-    const countSelesai = branchSpec.filter(t => 
-      t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
-      (isToday(t.timestamps.ready))
+    const countSelesai = branchSpec.filter(
+      (t) =>
+        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) &&
+        isToday(t.timestamps.ready),
     ).length;
 
-    const countResiHilang = branchSpec.filter(t => 
-      t.flags?.includes("RESI_HILANG" as any) && 
-      (isToday(t.timestamps.ready) || (t.status === "ready" && isToday(t.timestamps.arrival)))
+    const countResiHilang = branchSpec.filter(
+      (t) =>
+        t.flags?.includes("RESI_HILANG" as any) &&
+        (isToday(t.timestamps.ready) ||
+          (t.status === "ready" && isToday(t.timestamps.arrival))),
     ).length;
 
-    const countFollowUp = branchSpec.filter(t => {
+    const countFollowUp = branchSpec.filter((t) => {
       if (t.status !== "taken" || !t.timestamps.taken) return false;
       if (isTicketExcludedFromFollowUp(t)) return false;
       const takenTime = new Date(t.timestamps.taken).getTime();
@@ -651,10 +749,16 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       return daysSinceTaken >= 8;
     }).length;
 
-    const monthlyFollowUp = branchSpec.filter(t => {
+    const monthlyFollowUp = branchSpec.filter((t) => {
       if (t.status === "done") {
-        const isFinishedThisMonth = t.timestamps?.finished && isWithinMonthlyCutoff(t.timestamps.finished);
-        const isLate = t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP");
+        const isFinishedThisMonth =
+          t.timestamps?.finished &&
+          isWithinMonthlyCutoff(t.timestamps.finished);
+        const isLate = t.flags?.some(
+          (f2) =>
+            (f2 as any) === "TELAT_FOLLOW_UP" ||
+            (f2 as any) === "LATE_FOLLOW_UP",
+        );
         return isFinishedThisMonth && isLate;
       } else if (t.status === "taken") {
         if (!t.timestamps.taken) return false;
@@ -667,105 +771,145 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     }).length;
 
     // Active
-    const active = branchSpec.filter(t => t.status === "active");
+    const active = branchSpec.filter((t) => t.status === "active");
     // Waiting
-    const waiting = branchSpec.filter(t => t.status === "waiting");
+    const waiting = branchSpec.filter((t) => t.status === "waiting");
     // Ready
-    const ready = branchSpec.filter(t => t.status === "ready");
+    const ready = branchSpec.filter((t) => t.status === "ready");
 
     // Helper formatting function
     const ticketFormat = (t: Ticket) => {
       const svcs = t.serviceTypes.join(", ");
       const num = t.ticketNumber ? `#${t.ticketNumber}` : `${t.id}`;
-      const elapsed = calculateTicketDuration(t, isBengkelOpen, isOvertimeActive, isDebriefInProgress, debriefFrozenAt, overtimeTicketIds, overtimeStoppedAt);
+      const elapsed = calculateTicketDuration(
+        t,
+        isBengkelOpen,
+        isOvertimeActive,
+        isDebriefInProgress,
+        debriefFrozenAt,
+        overtimeTicketIds,
+        overtimeStoppedAt,
+      );
       return `- [${num}] ${t.customerName.toUpperCase()} - ${t.unitSepeda.toUpperCase()} - (${svcs.toUpperCase()}) - ${elapsed}`;
     };
 
     // Gather all branch mechanics from configuration, supplemented by any historically assigned to today's active tickets.
     const allMechanicNames = new Set<string>();
-    mechanics.forEach(m => {
+    mechanics.forEach((m) => {
       if (m && m.name) allMechanicNames.add(m.name.trim().toUpperCase());
     });
-    branchSpec.forEach(t => {
+    branchSpec.forEach((t) => {
       if (t.mechanic) allMechanicNames.add(t.mechanic.trim().toUpperCase());
-      if (t.overtimeMechanic) allMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
+      if (t.overtimeMechanic)
+        allMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
     });
 
     let mechanicSection = "";
-    Array.from(allMechanicNames).sort().forEach(picName => {
-      const picCountService = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) && 
-        (isToday(t.timestamps.called) || isToday(t.timestamps.arrival))
-      ).length;
+    Array.from(allMechanicNames)
+      .sort()
+      .forEach((picName) => {
+        const picCountService = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("TELAT_UPDATE_SERVICE" as any) &&
+            (isToday(t.timestamps.called) || isToday(t.timestamps.arrival)),
+        ).length;
 
-      const monthlyPicCountService = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("TELAT_UPDATE_SERVICE" as any) && 
-        (isWithinMonthlyCutoff(t.timestamps.called) || isWithinMonthlyCutoff(t.timestamps.arrival))
-      ).length;
+        const monthlyPicCountService = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("TELAT_UPDATE_SERVICE" as any) &&
+            (isWithinMonthlyCutoff(t.timestamps.called) ||
+              isWithinMonthlyCutoff(t.timestamps.arrival)),
+        ).length;
 
-      const picCountSelesai = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
-        (isToday(t.timestamps.ready))
-      ).length;
+        const picCountSelesai = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("TELAT_UPDATE_SELESAI" as any) &&
+            isToday(t.timestamps.ready),
+        ).length;
 
-      const monthlyPicCountSelesai = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("TELAT_UPDATE_SELESAI" as any) && 
-        isWithinMonthlyCutoff(t.timestamps.ready)
-      ).length;
+        const monthlyPicCountSelesai = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("TELAT_UPDATE_SELESAI" as any) &&
+            isWithinMonthlyCutoff(t.timestamps.ready),
+        ).length;
 
-      const picCountResiHilang = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("RESI_HILANG" as any) && 
-        (isToday(t.timestamps.ready) || (t.status === "ready" && isToday(t.timestamps.arrival)))
-      ).length;
+        const picCountResiHilang = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("RESI_HILANG" as any) &&
+            (isToday(t.timestamps.ready) ||
+              (t.status === "ready" && isToday(t.timestamps.arrival))),
+        ).length;
 
-      const monthlyPicCountResiHilang = branchSpec.filter(t => 
-        (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName) && 
-        t.flags?.includes("RESI_HILANG" as any) && 
-        (isWithinMonthlyCutoff(t.timestamps.ready) || (t.status === "ready" && isWithinMonthlyCutoff(t.timestamps.arrival)))
-      ).length;
+        const monthlyPicCountResiHilang = branchSpec.filter(
+          (t) =>
+            (t.mechanic?.trim().toUpperCase() === picName ||
+              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            t.flags?.includes("RESI_HILANG" as any) &&
+            (isWithinMonthlyCutoff(t.timestamps.ready) ||
+              (t.status === "ready" &&
+                isWithinMonthlyCutoff(t.timestamps.arrival))),
+        ).length;
 
-      const hasActiveCard = branchSpec.some(t => {
-        const isPIC = (t.mechanic?.trim().toUpperCase() === picName || t.overtimeMechanic?.trim().toUpperCase() === picName);
-        const isActiveState = (t.status === "waiting" || t.status === "active" || t.status === "pending" || t.status === "ready");
-        return isPIC && isActiveState;
+        const hasActiveCard = branchSpec.some((t) => {
+          const isPIC =
+            t.mechanic?.trim().toUpperCase() === picName ||
+            t.overtimeMechanic?.trim().toUpperCase() === picName;
+          const isActiveState =
+            t.status === "waiting" ||
+            t.status === "active" ||
+            t.status === "pending" ||
+            t.status === "ready";
+          return isPIC && isActiveState;
+        });
+
+        const hasIndicators =
+          picCountService > 0 || picCountSelesai > 0 || picCountResiHilang > 0;
+
+        if (hasActiveCard || hasIndicators) {
+          mechanicSection += `\n*MECHANIC - ${picName}*\n`;
+          mechanicSection += `- Telat Update Service: ${picCountService} Unit (Bulan ini: ${monthlyPicCountService} Unit)\n`;
+          mechanicSection += `- Telat Update Selesai: ${picCountSelesai} Unit (Bulan ini: ${monthlyPicCountSelesai} Unit)\n`;
+          mechanicSection += `- Resi Hilang: ${picCountResiHilang} Unit (Bulan ini: ${monthlyPicCountResiHilang} Unit)\n`;
+        }
       });
-
-      const hasIndicators = picCountService > 0 || picCountSelesai > 0 || picCountResiHilang > 0;
-
-      if (hasActiveCard || hasIndicators) {
-        mechanicSection += `\n*MECHANIC - ${picName}*\n`;
-        mechanicSection += `- Telat Update Service: ${picCountService} Unit (Bulan ini: ${monthlyPicCountService} Unit)\n`;
-        mechanicSection += `- Telat Update Selesai: ${picCountSelesai} Unit (Bulan ini: ${monthlyPicCountSelesai} Unit)\n`;
-        mechanicSection += `- Resi Hilang: ${picCountResiHilang} Unit (Bulan ini: ${monthlyPicCountResiHilang} Unit)\n`;
-      }
-    });
 
     // Format Overtime Section if active
     let overtimeSection = "";
     if (hasOvertimeToday && selectedOvertimeTickets.length > 0) {
       overtimeSection += `*OVERTIME (LEMBUR)*\n\n`;
-      const selectedTickets = tickets.filter(t => selectedOvertimeTickets.includes(t.id));
+      const selectedTickets = tickets.filter((t) =>
+        selectedOvertimeTickets.includes(t.id),
+      );
       const ticketsByPic: { [mechName: string]: Ticket[] } = {};
-      selectedTickets.forEach(t => {
-        const pic = (t.mechanic || t.overtimeMechanic || "TIDAK ADA PIC").trim().toUpperCase();
+      selectedTickets.forEach((t) => {
+        const pic = (t.mechanic || t.overtimeMechanic || "TIDAK ADA PIC")
+          .trim()
+          .toUpperCase();
         if (!ticketsByPic[pic]) {
           ticketsByPic[pic] = [];
         }
         ticketsByPic[pic].push(t);
       });
 
-      Object.keys(ticketsByPic).sort().forEach(picName => {
-        overtimeSection += `*[${picName}]*\n`;
-        ticketsByPic[picName].forEach(t => {
-          overtimeSection += `${ticketFormat(t)}\n`;
+      Object.keys(ticketsByPic)
+        .sort()
+        .forEach((picName) => {
+          overtimeSection += `*[${picName}]*\n`;
+          ticketsByPic[picName].forEach((t) => {
+            overtimeSection += `${ticketFormat(t)}\n`;
+          });
+          overtimeSection += `\n`;
         });
-        overtimeSection += `\n`;
-      });
     }
 
     let report = `*LAPORAN BENGKEL DAILY BIKE*\n_Tanggal: ${dateStr}_\n\n`;
@@ -786,7 +930,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     report += `*SEDANG DIKERJAKAN:*\n`;
     if (active.length > 0) {
-      active.forEach(t => { report += `${ticketFormat(t)}\n`; });
+      active.forEach((t) => {
+        report += `${ticketFormat(t)}\n`;
+      });
     } else {
       report += `- TIDAK ADA ANTRIAN\n`;
     }
@@ -794,7 +940,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     report += `*ANTRIAN MENUNGGU:*\n`;
     if (waiting.length > 0) {
-      waiting.forEach(t => { report += `${ticketFormat(t)}\n`; });
+      waiting.forEach((t) => {
+        report += `${ticketFormat(t)}\n`;
+      });
     } else {
       report += `- TIDAK ADA ANTRIAN\n`;
     }
@@ -802,14 +950,16 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
     report += `*SIAP DIAMBIL:*\n`;
     if (ready.length > 0) {
-      ready.forEach(t => { report += `${ticketFormat(t)}\n`; });
+      ready.forEach((t) => {
+        report += `${ticketFormat(t)}\n`;
+      });
     } else {
       report += `- TIDAK ADA ANTRIAN\n`;
     }
     report += `\n`;
 
     report += `*FOLLOW UP:*\n`;
-    const followUpTickets = branchSpec.filter(t => {
+    const followUpTickets = branchSpec.filter((t) => {
       if (t.status !== "taken" || !t.timestamps.taken) return false;
       if (isTicketExcludedFromFollowUp(t)) return false;
       const takenTime = new Date(t.timestamps.taken).getTime();
@@ -817,7 +967,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       return daysSinceTaken >= 3;
     });
     if (followUpTickets.length > 0) {
-      followUpTickets.forEach(t => {
+      followUpTickets.forEach((t) => {
         report += `${ticketFormat(t)}\n`;
       });
     } else {
@@ -828,20 +978,27 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   };
 
   const isGaransiTicket = (t: Ticket) => {
-    const hasGaransiNote = t.notes && t.notes.includes('[GARANSI]');
-    const hasGaransiService = t.serviceTypes && t.serviceTypes.some(s => s.trim().toUpperCase() === 'GARANSI');
+    const hasGaransiNote = t.notes && t.notes.includes("[GARANSI]");
+    const hasGaransiService =
+      t.serviceTypes &&
+      t.serviceTypes.some((s) => s.trim().toUpperCase() === "GARANSI");
     return !!(hasGaransiNote || hasGaransiService);
   };
 
   const isBerhasilTicket = (t: Ticket) => {
     if (isGaransiTicket(t)) return false;
     const res = t.followUpResult ? t.followUpResult.trim() : "";
-    return res === 'Selesai' || res === 'Berhasil' || res === 'Tidak Respond' || res === 'Milik Internal';
+    return (
+      res === "Selesai" ||
+      res === "Berhasil" ||
+      res === "Tidak Respond" ||
+      res === "Milik Internal"
+    );
   };
 
   const isBermasalahTicket = (t: Ticket) => {
     if (isGaransiTicket(t)) return false;
-    return t.followUpResult?.trim() === 'Kendala';
+    return t.followUpResult?.trim() === "Kendala";
   };
 
   const getMonthlyCutoffDates = (d?: Date) => {
@@ -884,59 +1041,91 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   const compileMonthlyReportText = () => {
     const today = new Date();
     const monthNamesIndonesian = [
-      "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
-      "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
+      "JANUARI",
+      "FEBRUARI",
+      "MARET",
+      "APRIL",
+      "MEI",
+      "JUNI",
+      "JULI",
+      "AGUSTUS",
+      "SEPTEMBER",
+      "OKTOBER",
+      "NOVEMBER",
+      "DESEMBER",
     ];
     const currentMonthName = monthNamesIndonesian[today.getMonth()];
     const currentYear = today.getFullYear();
 
     const { startDate, endDate } = getMonthlyCutoffDates();
 
-    const branchSpec = tickets.filter(t => t.branch === branch);
+    const branchSpec = tickets.filter((t) => t.branch === branch);
 
-    const cutoffTickets = branchSpec.filter(t => {
+    const cutoffTickets = branchSpec.filter((t) => {
       if (t.status !== "done") return false;
       if (!t.followUpResult || t.followUpResult.trim() === "") return false;
-      
-      const tFinished = t.timestamps?.finished ? new Date(t.timestamps.finished) : null;
+
+      const tFinished = t.timestamps?.finished
+        ? new Date(t.timestamps.finished)
+        : null;
       if (!tFinished) return false;
       return tFinished >= startDate && tFinished <= endDate;
     });
 
-    const totalServiceSelesai = cutoffTickets.filter(t => !isGaransiTicket(t)).length;
-    const berhasilCount = cutoffTickets.filter(t => isBerhasilTicket(t)).length;
-    const bermasalahCount = cutoffTickets.filter(t => isBermasalahTicket(t)).length;
-
-    const adminTelatUpdateAntrian = cutoffTickets.filter(t => 
-      t.flags?.some(f2 => (f2 as any) === "TELAT_UPDATE_ANTRIAN" || (f2 as any) === "TELAT_UPDATE")
+    const totalServiceSelesai = cutoffTickets.filter(
+      (t) => !isGaransiTicket(t),
+    ).length;
+    const berhasilCount = cutoffTickets.filter((t) =>
+      isBerhasilTicket(t),
+    ).length;
+    const bermasalahCount = cutoffTickets.filter((t) =>
+      isBermasalahTicket(t),
     ).length;
 
-    const adminTelatFollowUp = cutoffTickets.filter(t => 
-      t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP")
+    const adminTelatUpdateAntrian = cutoffTickets.filter((t) =>
+      t.flags?.some(
+        (f2) =>
+          (f2 as any) === "TELAT_UPDATE_ANTRIAN" ||
+          (f2 as any) === "TELAT_UPDATE",
+      ),
+    ).length;
+
+    const adminTelatFollowUp = cutoffTickets.filter((t) =>
+      t.flags?.some(
+        (f2) =>
+          (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP",
+      ),
     ).length;
 
     const activeMechanicNames = new Set<string>();
-    cutoffTickets.forEach(t => {
+    cutoffTickets.forEach((t) => {
       if (t.mechanic) activeMechanicNames.add(t.mechanic.trim().toUpperCase());
-      if (t.overtimeMechanic) activeMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
+      if (t.overtimeMechanic)
+        activeMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
     });
 
     const sortedMechanicsObj = Array.from(activeMechanicNames).sort();
 
     let mechanicScoresStr = "";
-    sortedMechanicsObj.forEach(mName => {
-      const picTelatUpdateService = cutoffTickets.filter(t => {
-        const isPIC = (t.mechanic?.trim().toUpperCase() === mName) || (t.overtimeMechanic?.trim().toUpperCase() === mName);
+    sortedMechanicsObj.forEach((mName) => {
+      const picTelatUpdateService = cutoffTickets.filter((t) => {
+        const isPIC =
+          t.mechanic?.trim().toUpperCase() === mName ||
+          t.overtimeMechanic?.trim().toUpperCase() === mName;
         return isPIC && t.flags?.includes("TELAT_UPDATE_SERVICE" as any);
       }).length;
 
-      const picTelatUpdateSelesai = cutoffTickets.filter(t => {
-        const isPIC = (t.mechanic?.trim().toUpperCase() === mName) || (t.overtimeMechanic?.trim().toUpperCase() === mName);
+      const picTelatUpdateSelesai = cutoffTickets.filter((t) => {
+        const isPIC =
+          t.mechanic?.trim().toUpperCase() === mName ||
+          t.overtimeMechanic?.trim().toUpperCase() === mName;
         return isPIC && t.flags?.includes("TELAT_UPDATE_SELESAI" as any);
       }).length;
 
-      const picResiHilang = cutoffTickets.filter(t => {
-        const isPIC = (t.mechanic?.trim().toUpperCase() === mName) || (t.overtimeMechanic?.trim().toUpperCase() === mName);
+      const picResiHilang = cutoffTickets.filter((t) => {
+        const isPIC =
+          t.mechanic?.trim().toUpperCase() === mName ||
+          t.overtimeMechanic?.trim().toUpperCase() === mName;
         return isPIC && t.flags?.includes("RESI_HILANG" as any);
       }).length;
 
@@ -985,16 +1174,16 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
   };
 
   // Filter dealpos orders by search
-  const filteredDealpos = dealposOrders.filter(o => 
-    o.Number?.toLowerCase().includes(dealposSearchTerm.toLowerCase()) ||
-    o.Customer?.toLowerCase().includes(dealposSearchTerm.toLowerCase()) ||
-    o.ParkLabel?.toLowerCase().includes(dealposSearchTerm.toLowerCase())
+  const filteredDealpos = dealposOrders.filter(
+    (o) =>
+      o.Number?.toLowerCase().includes(dealposSearchTerm.toLowerCase()) ||
+      o.Customer?.toLowerCase().includes(dealposSearchTerm.toLowerCase()) ||
+      o.ParkLabel?.toLowerCase().includes(dealposSearchTerm.toLowerCase()),
   );
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col font-sans">
-        
         {/* HEADER */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div>
@@ -1010,7 +1199,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
               Wizard Tutup Bengkel & Evaluasi
             </h3>
           </div>
-          <button 
+          <button
             onClick={handleCloseDebriefModal}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
           >
@@ -1020,25 +1209,33 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
         {/* STEPPER PROGRESS */}
         <div className="px-6 py-4 bg-slate-100/50 border-b border-slate-100 flex items-center justify-between gap-1 overflow-x-auto whitespace-nowrap">
-          {(hasMonthlyRekap ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : [1, 2, 3, 4, 5, 6, 7, 8]).map((s) => (
+          {(hasMonthlyRekap
+            ? [1, 2, 3, 4, 5, 6, 7, 8, 9]
+            : [1, 2, 3, 4, 5, 6, 7, 8]
+          ).map((s) => (
             <div key={s} className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                step === s 
-                  ? "bg-slate-900 text-white shadow-md ring-4 ring-slate-100 scale-105" 
-                  : step > s 
-                    ? "bg-emerald-500 text-white" 
-                    : "bg-slate-200 text-slate-500"
-              }`}>
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                  step === s
+                    ? "bg-slate-900 text-white shadow-md ring-4 ring-slate-100 scale-105"
+                    : step > s
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-200 text-slate-500"
+                }`}
+              >
                 {step > s ? <Check size={14} /> : s}
               </div>
-              {s < (hasMonthlyRekap ? 9 : 8) && <div className={`w-4 sm:w-8 h-0.5 ${step > s ? "bg-emerald-400" : "bg-slate-200"}`}></div>}
+              {s < (hasMonthlyRekap ? 9 : 8) && (
+                <div
+                  className={`w-4 sm:w-8 h-0.5 ${step > s ? "bg-emerald-400" : "bg-slate-200"}`}
+                ></div>
+              )}
             </div>
           ))}
         </div>
 
         {/* COMPONENT BODY */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          
           {/* STEP 1: GATHERING */}
           {step === 1 && (
             <div className="space-y-6 text-center max-w-lg mx-auto py-12">
@@ -1046,17 +1243,32 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 <Users size={32} />
               </div>
               <div className="space-y-2">
-                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">Kumpulkan Semua Staff Bengkel</h4>
+                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                  Kumpulkan Semua Staff Bengkel
+                </h4>
                 <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Harap kumpulkan seluruh **Mekanik** dan **Admin** di area meja depan untuk memulai evaluasi, pengecekan, serta debriefing operasional harian.
+                  Harap kumpulkan seluruh **Mekanik** dan **Admin** di area meja
+                  depan untuk memulai evaluasi, pengecekan, serta debriefing
+                  operasional harian.
                 </p>
               </div>
-              
+
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-left">
-                <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+                <AlertCircle
+                  className="text-amber-600 shrink-0 mt-0.5"
+                  size={18}
+                />
                 <div className="text-xs font-semibold text-amber-800 leading-relaxed">
-                  <p className="font-extrabold uppercase mb-1">PEMBERITAHUAN UTAMA</p>
-                  Mengklik tombol <strong className="font-black">"Mulai Freeze (Selanjutnya)"</strong> di bawah akan **membekukan seluruh asupan pendaftaran baru (no intake)**, menghentikan live tracker waktu pengerjaan serta menutup akses ubah status dari sisi mekanik.
+                  <p className="font-extrabold uppercase mb-1">
+                    PEMBERITAHUAN UTAMA
+                  </p>
+                  Mengklik tombol{" "}
+                  <strong className="font-black">
+                    "Mulai Freeze (Selanjutnya)"
+                  </strong>{" "}
+                  di bawah akan **membekukan seluruh asupan pendaftaran baru (no
+                  intake)**, menghentikan live tracker waktu pengerjaan serta
+                  menutup akses ubah status dari sisi mekanik.
                 </div>
               </div>
 
@@ -1078,20 +1290,33 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 <Ban size={28} />
               </div>
               <div className="space-y-2">
-                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">Bengkel Berhasil Bekukan (Frozen)</h4>
+                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                  Bengkel Berhasil Bekukan (Frozen)
+                </h4>
                 <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Seluruh pembaruan di lapangan telah dihentikan (freeze mode) demi proses rekonsiliasi yang valid.
+                  Seluruh pembaruan di lapangan telah dihentikan (freeze mode)
+                  demi proses rekonsiliasi yang valid.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left pt-2">
                 <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-1">
-                  <span className="text-[9px] bg-rose-100 text-rose-700 font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">FREEZE CLOCK</span>
-                  <p className="text-xs font-bold text-slate-700">Waktu berjalan untuk tiket "Sedang Dikerjakan" dan "Tertunda" dihentikan harian.</p>
+                  <span className="text-[9px] bg-rose-100 text-rose-700 font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">
+                    FREEZE CLOCK
+                  </span>
+                  <p className="text-xs font-bold text-slate-700">
+                    Waktu berjalan untuk tiket "Sedang Dikerjakan" dan
+                    "Tertunda" dihentikan harian.
+                  </p>
                 </div>
                 <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-1">
-                  <span className="text-[9px] bg-amber-100 text-amber-700 font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">LOCKED ACTIONS</span>
-                  <p className="text-xs font-bold text-slate-700">Mekanik dilarang memperbarui status antrian. Seluruh tombol pembaruan terkunci.</p>
+                  <span className="text-[9px] bg-amber-100 text-amber-700 font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">
+                    LOCKED ACTIONS
+                  </span>
+                  <p className="text-xs font-bold text-slate-700">
+                    Mekanik dilarang memperbarui status antrian. Seluruh tombol
+                    pembaruan terkunci.
+                  </p>
                 </div>
               </div>
 
@@ -1114,19 +1339,29 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   <Link size={16} /> 1. Rekonsiliasi Kartu Antrian Manual
                 </h4>
                 <p className="text-xs text-blue-700 mt-1 font-semibold leading-relaxed">
-                  Harap hubungkan semua kartu antrian virtual manual dengan kode tagihan/OrderID parkir di DealPOS. Jika belum memiliki, input OrderID/Invoice parkir secara manual untuk mencegah data loss.
+                  Harap hubungkan semua kartu antrian virtual manual dengan kode
+                  tagihan/OrderID parkir di DealPOS. Jika belum memiliki, input
+                  OrderID/Invoice parkir secara manual untuk mencegah data loss.
                 </p>
               </div>
 
               {manualTickets.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <CheckSquare className="text-emerald-500 mx-auto animate-bounce" size={32} />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Tidak ada kartu antrian manual yang tersisa!</p>
+                  <CheckSquare
+                    className="text-emerald-500 mx-auto animate-bounce"
+                    size={32}
+                  />
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+                    Tidak ada kartu antrian manual yang tersisa!
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {manualTickets.map(ticket => (
-                    <div key={ticket.id} className="p-5 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start gap-5 bg-white shadow-sm hover:shadow transition-shadow">
+                  {manualTickets.map((ticket) => (
+                    <div
+                      key={ticket.id}
+                      className="p-5 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start gap-5 bg-white shadow-sm hover:shadow transition-shadow"
+                    >
                       <div className="flex-1 min-w-[200px]">
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-black bg-slate-200 text-slate-700 px-2 py-0.5 rounded uppercase">
@@ -1137,20 +1372,25 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-bold mt-1">
-                          Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")}
+                          Model: {ticket.unitSepeda} — Servis:{" "}
+                          {ticket.serviceTypes.join(", ")}
                         </p>
                       </div>
 
                       <div className="w-full md:w-96 flex flex-col gap-4 border-t pt-4 md:border-t-0 md:pt-0 md:pl-5 md:border-l border-slate-150 shrink-0">
                         {reconcileSaved[ticket.id] ? (
                           <div className="flex items-center justify-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-3 rounded-xl text-xs font-black uppercase border border-emerald-200">
-                            <Check size={16} /> Tersimpan ({reconcileInputs[ticket.id]?.replace(/^#+/, "")})
+                            <Check size={16} /> Tersimpan (
+                            {reconcileInputs[ticket.id]?.replace(/^#+/, "")})
                           </div>
                         ) : (
                           <div className="space-y-4">
                             {/* Option 1: Search & Choose from open Parked Orders */}
                             <div className="space-y-1.5 relative">
-                              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi A: Cari & Pilih Tagihan Terbuka (Parked Order)</span>
+                              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
+                                Opsi A: Cari & Pilih Tagihan Terbuka (Parked
+                                Order)
+                              </span>
                               <div className="relative flex items-center">
                                 <input
                                   type="text"
@@ -1158,11 +1398,20 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   className="w-full p-2.5 pr-14 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-bold text-slate-800 placeholder-slate-400"
                                   value={step3Searches[ticket.id] || ""}
                                   onChange={(e) => {
-                                    setStep3Searches(prev => ({ ...prev, [ticket.id]: e.target.value }));
-                                    setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: true }));
+                                    setStep3Searches((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: e.target.value,
+                                    }));
+                                    setStep3DropdownOpen((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: true,
+                                    }));
                                   }}
                                   onFocus={() => {
-                                    setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: true }));
+                                    setStep3DropdownOpen((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: true,
+                                    }));
                                   }}
                                 />
                                 <div className="absolute right-2 flex items-center gap-1.5 z-10">
@@ -1170,9 +1419,18 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setStep3Searches(prev => ({ ...prev, [ticket.id]: "" }));
-                                        setReconcileInputs(prev => ({ ...prev, [ticket.id]: "" }));
-                                        setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: true }));
+                                        setStep3Searches((prev) => ({
+                                          ...prev,
+                                          [ticket.id]: "",
+                                        }));
+                                        setReconcileInputs((prev) => ({
+                                          ...prev,
+                                          [ticket.id]: "",
+                                        }));
+                                        setStep3DropdownOpen((prev) => ({
+                                          ...prev,
+                                          [ticket.id]: true,
+                                        }));
                                       }}
                                       className="text-slate-400 hover:text-slate-600 text-xs font-bold"
                                     >
@@ -1182,7 +1440,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: !prev[ticket.id] }));
+                                      setStep3DropdownOpen((prev) => ({
+                                        ...prev,
+                                        [ticket.id]: !prev[ticket.id],
+                                      }));
                                     }}
                                     className="text-slate-400 hover:text-slate-600"
                                   >
@@ -1190,77 +1451,181 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   </button>
                                 </div>
                               </div>
-                              
+
                               {/* List filtered results if dropdown is open */}
                               {step3DropdownOpen[ticket.id] && (
                                 <>
-                                  <div 
-                                    className="fixed inset-0 z-40" 
-                                    onClick={() => setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: false }))}
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() =>
+                                      setStep3DropdownOpen((prev) => ({
+                                        ...prev,
+                                        [ticket.id]: false,
+                                      }))
+                                    }
                                   />
                                   <div className="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-lg divide-y divide-slate-100 mt-1">
                                     {(() => {
-                                      const rawQ = step3Searches[ticket.id] || "";
-                                      const isPreSelected = rawQ.startsWith("#");
-                                      const q = isPreSelected ? "" : rawQ.toLowerCase().trim();
-                                      
-                                      const dealposTicketCounts: { [orderId: string]: number } = {};
+                                      const rawQ =
+                                        step3Searches[ticket.id] || "";
+                                      const isPreSelected =
+                                        rawQ.startsWith("#");
+                                      const q = isPreSelected
+                                        ? ""
+                                        : rawQ.toLowerCase().trim();
+
+                                      const dealposTicketCounts: {
+                                        [orderId: string]: number;
+                                      } = {};
                                       (tickets || []).forEach((t: any) => {
-                                        if (t.dealposOrderId) {
-                                          const key = normalizeOrderId(t.dealposOrderId);
-                                          dealposTicketCounts[key] = (dealposTicketCounts[key] || 0) + 1;
-                                        }
-                                      });
-
-                                      const matches = dealposOrders.filter(o => {
-                                        if (q) {
-                                          const matchesQuery = (o.Number || "").toLowerCase().includes(q) ||
-                                            (o.Customer || "").toLowerCase().includes(q) ||
-                                            (o.ParkLabel || "").toLowerCase().includes(q);
-                                          if (!matchesQuery) return false;
-                                        }
-
-                                        let totalAllowedTickets = 0;
-                                        if (o.Variants) {
-                                          o.Variants.forEach((v: any) => {
-                                            const code = v.Code || "";
-                                            const itemId = v.ItemID || "";
-                                            if (code.startsWith("DBJS") || itemId.startsWith("DBJS")) {
-                                              const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
-                                              totalAllowedTickets += qty;
-                                            }
+                                        if (t.status !== "cancelled") {
+                                          const keys: string[] = [];
+                                          if (t.dealposOrderId) {
+                                            keys.push(
+                                              normalizeOrderId(
+                                                t.dealposOrderId,
+                                              ),
+                                            );
+                                          }
+                                          if (t.dealposOrderNumber) {
+                                            keys.push(
+                                              normalizeOrderId(
+                                                t.dealposOrderNumber,
+                                              ),
+                                            );
+                                          }
+                                          const uniqueKeys = Array.from(
+                                            new Set(keys),
+                                          );
+                                          uniqueKeys.forEach((k) => {
+                                            dealposTicketCounts[k] =
+                                              (dealposTicketCounts[k] || 0) +
+                                              1;
                                           });
                                         }
-                                        if (totalAllowedTickets === 0) totalAllowedTickets = 1;
-
-                                        const normGroupID = normalizeOrderId(o.OrderID);
-                                        const currentCount = dealposTicketCounts[normGroupID] || 0;
-
-                                        if (normalizeOrderId(reconcileInputs[ticket.id]) === normGroupID) {
-                                          return true;
-                                        }
-
-                                        return currentCount < totalAllowedTickets;
                                       });
-                                      
+
+                                      const matches = dealposOrders.filter(
+                                        (o) => {
+                                          if (q) {
+                                            const matchesQuery =
+                                              (o.Number || "")
+                                                .toLowerCase()
+                                                .includes(q) ||
+                                              (o.Customer || "")
+                                                .toLowerCase()
+                                                .includes(q) ||
+                                              (o.ParkLabel || "")
+                                                .toLowerCase()
+                                                .includes(q);
+                                            if (!matchesQuery) return false;
+                                          }
+
+                                          let totalAllowedTickets = 0;
+                                          if (o.Variants) {
+                                            o.Variants.forEach((v: any) => {
+                                              const code = v.Code || "";
+                                              const itemId = v.ItemID || "";
+                                              if (
+                                                code.startsWith("DBJS") ||
+                                                itemId.startsWith("DBJS")
+                                              ) {
+                                                const qty = Number(
+                                                  v.Quantity ||
+                                                    v.quantity ||
+                                                    v.Qty ||
+                                                    v.qty ||
+                                                    1,
+                                                );
+                                                totalAllowedTickets += qty;
+                                              }
+                                            });
+                                          }
+                                          if (totalAllowedTickets === 0)
+                                            totalAllowedTickets = 1;
+
+                                          const normGroupID = normalizeOrderId(
+                                            o.OrderID,
+                                          );
+                                          const normGroupNum = normalizeOrderId(
+                                            o.Number || o.ParkLabel,
+                                          );
+                                          const normGuid = normalizeOrderId(
+                                            o.dealposGuid,
+                                          );
+                                          const currentCount =
+                                            (normGuid
+                                              ? dealposTicketCounts[
+                                                  normGuid
+                                                ] || 0
+                                              : 0) ||
+                                            dealposTicketCounts[normGroupID] ||
+                                            0 ||
+                                            (normGroupNum
+                                              ? dealposTicketCounts[
+                                                  normGroupNum
+                                                ] || 0
+                                              : 0);
+
+                                          const normInput = normalizeOrderId(
+                                            reconcileInputs[ticket.id],
+                                          );
+                                          if (
+                                            normInput === normGroupID ||
+                                            (normGroupNum &&
+                                              normInput === normGroupNum) ||
+                                            (normGuid &&
+                                              normInput === normGuid)
+                                          ) {
+                                            return true;
+                                          }
+
+                                          return currentCount === 0;
+                                        },
+                                      );
+
                                       if (matches.length === 0) {
-                                        return <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">Tidak ada kecocokan</div>;
+                                        return (
+                                          <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">
+                                            Tidak ada kecocokan
+                                          </div>
+                                        );
                                       }
-                                      return matches.map(o => {
-                                        const dispId = String(o.OrderID).startsWith("#") ? String(o.OrderID) : `#${String(o.OrderID)}`;
+                                      return matches.map((o) => {
+                                        const dispId = String(
+                                          o.OrderID,
+                                        ).startsWith("#")
+                                          ? String(o.OrderID)
+                                          : `#${String(o.OrderID)}`;
                                         return (
                                           <button
                                             key={o.OrderID}
                                             type="button"
                                             onClick={() => {
-                                              setReconcileInputs(prev => ({ ...prev, [ticket.id]: o.OrderID }));
-                                              setStep3Searches(prev => ({ ...prev, [ticket.id]: `${dispId} - ${o.Customer || o.ParkLabel || "No Name"}` }));
-                                              setStep3DropdownOpen(prev => ({ ...prev, [ticket.id]: false }));
+                                              setReconcileInputs((prev) => ({
+                                                ...prev,
+                                                [ticket.id]: o.OrderID,
+                                              }));
+                                              setStep3Searches((prev) => ({
+                                                ...prev,
+                                                [ticket.id]: `${dispId} - ${o.Customer || o.ParkLabel || "No Name"}`,
+                                              }));
+                                              setStep3DropdownOpen((prev) => ({
+                                                ...prev,
+                                                [ticket.id]: false,
+                                              }));
                                             }}
                                             className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
                                           >
-                                            <span>{dispId} - {o.Customer || o.ParkLabel || "No Name"}</span>
-                                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
+                                            <span>
+                                              {dispId} -{" "}
+                                              {o.Customer ||
+                                                o.ParkLabel ||
+                                                "No Name"}
+                                            </span>
+                                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                                              Pilih
+                                            </span>
                                           </button>
                                         );
                                       });
@@ -1272,39 +1637,77 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
                             {/* Option 2: Search finalized invoice by number */}
                             <div className="space-y-1.5">
-                              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi B: Cari No. Invoice (Final/Paid Backup)</span>
+                              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
+                                Opsi B: Cari No. Invoice (Final/Paid Backup)
+                              </span>
                               <div className="flex gap-2">
                                 <input
                                   type="text"
                                   placeholder="No. Invoice (misal: 26.05.00347)..."
                                   className="flex-1 p-2.5 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-bold text-slate-800 placeholder-slate-400"
                                   value={step3ManualInvoice[ticket.id] || ""}
-                                  onChange={(e) => setStep3ManualInvoice(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                                  onChange={(e) =>
+                                    setStep3ManualInvoice((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: e.target.value,
+                                    }))
+                                  }
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => searchInvoiceForTicket(ticket.id)}
-                                  disabled={!step3ManualInvoice[ticket.id]?.trim() || step3InvoiceSearchResult[ticket.id]?.loading}
+                                  onClick={() =>
+                                    searchInvoiceForTicket(ticket.id)
+                                  }
+                                  disabled={
+                                    !step3ManualInvoice[ticket.id]?.trim() ||
+                                    step3InvoiceSearchResult[ticket.id]?.loading
+                                  }
                                   className="px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1 shrink-0"
                                 >
-                                  {step3InvoiceSearchResult[ticket.id]?.loading ? "..." : "Cari"}
+                                  {step3InvoiceSearchResult[ticket.id]?.loading
+                                    ? "..."
+                                    : "Cari"}
                                 </button>
                               </div>
 
                               {/* Search results display */}
                               {step3InvoiceSearchResult[ticket.id] && (
                                 <div className="text-[11px] font-bold p-2.5 rounded-xl border mt-1">
-                                  {step3InvoiceSearchResult[ticket.id].loading && (
-                                    <div className="text-slate-500 animate-pulse uppercase">🔍 SEDANG MENCARI INVOICE...</div>
+                                  {step3InvoiceSearchResult[ticket.id]
+                                    .loading && (
+                                    <div className="text-slate-500 animate-pulse uppercase">
+                                      🔍 SEDANG MENCARI INVOICE...
+                                    </div>
                                   )}
-                                  {step3InvoiceSearchResult[ticket.id].error && (
-                                    <div className="text-rose-600 uppercase">❌ {step3InvoiceSearchResult[ticket.id].error}</div>
+                                  {step3InvoiceSearchResult[ticket.id]
+                                    .error && (
+                                    <div className="text-rose-600 uppercase">
+                                      ❌{" "}
+                                      {
+                                        step3InvoiceSearchResult[ticket.id]
+                                          .error
+                                      }
+                                    </div>
                                   )}
-                                  {step3InvoiceSearchResult[ticket.id].found && (
+                                  {step3InvoiceSearchResult[ticket.id]
+                                    .found && (
                                     <div className="text-emerald-600 uppercase flex flex-col gap-0.5">
-                                      <span className="font-black">✅ INVOICE DITEMUKAN:</span>
-                                      <span className="text-slate-800 font-bold">No: {step3InvoiceSearchResult[ticket.id].Number}</span>
-                                      <span className="text-slate-800 font-bold">Nama: {step3InvoiceSearchResult[ticket.id].CustomerName.toUpperCase()}</span>
+                                      <span className="font-black">
+                                        ✅ INVOICE DITEMUKAN:
+                                      </span>
+                                      <span className="text-slate-800 font-bold">
+                                        No:{" "}
+                                        {
+                                          step3InvoiceSearchResult[ticket.id]
+                                            .Number
+                                        }
+                                      </span>
+                                      <span className="text-slate-800 font-bold">
+                                        Nama:{" "}
+                                        {step3InvoiceSearchResult[
+                                          ticket.id
+                                        ].CustomerName.toUpperCase()}
+                                      </span>
                                     </div>
                                   )}
                                 </div>
@@ -1315,7 +1718,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                             {reconcileInputs[ticket.id] && (
                               <div className="pt-2 flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-dashed border-slate-200">
                                 <div className="text-[10px] font-black text-slate-600 uppercase truncate">
-                                  No: <span className="font-mono text-blue-600">{reconcileInputs[ticket.id]?.replace(/^#+/, "")}</span>
+                                  No:{" "}
+                                  <span className="font-mono text-blue-600">
+                                    {reconcileInputs[ticket.id]?.replace(
+                                      /^#+/,
+                                      "",
+                                    )}
+                                  </span>
                                 </div>
                                 <button
                                   onClick={() => handleSaveReconcile(ticket.id)}
@@ -1325,7 +1734,6 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                 </button>
                               </div>
                             )}
-
                           </div>
                         )}
                       </div>
@@ -1336,8 +1744,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
               {unclearedManualTickets.length > 0 && (
                 <div className="bg-amber-50 border border-amber-250 p-3.5 rounded-xl flex items-center gap-2.5 text-amber-800 text-xs font-black uppercase tracking-wider">
-                  <AlertCircle size={16} className="text-amber-600 animate-pulse" />
-                  <span>Sisa {unclearedManualTickets.length} Kartu Manual Belum Direkonsiliasi</span>
+                  <AlertCircle
+                    size={16}
+                    className="text-amber-600 animate-pulse"
+                  />
+                  <span>
+                    Sisa {unclearedManualTickets.length} Kartu Manual Belum
+                    Direkonsiliasi
+                  </span>
                 </div>
               )}
 
@@ -1366,19 +1780,28 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   <Clock size={16} /> 2. Review Antrian "Menunggu"
                 </h4>
                 <p className="text-xs text-amber-800 mt-1 font-semibold leading-relaxed">
-                  Apakah di lapangan ada antrian yang sudah dikerjakan mekanik namun admin lupa memindahkannya ke kolom "Dikerjakan"? Isilah mekanik PIC dan pindahkan ke dikerjakan sekarang. (Semua perubahan di sini otomatis bertagar <strong className="font-bold">TELAT_UPDATE_SERVICE</strong>).
+                  Apakah di lapangan ada antrian yang sudah dikerjakan mekanik
+                  namun admin lupa memindahkannya ke kolom "Dikerjakan"? Isilah
+                  mekanik PIC dan pindahkan ke dikerjakan sekarang. (Semua
+                  perubahan di sini otomatis bertagar{" "}
+                  <strong className="font-bold">TELAT_UPDATE_SERVICE</strong>).
                 </p>
               </div>
 
               {waitingTickets.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <CheckSquare className="text-emerald-500 mx-auto" size={32} />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Kolom Menunggu Bersih!</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+                    Kolom Menunggu Bersih!
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {waitingTickets.map(ticket => (
-                    <div key={ticket.id} className="p-4 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white shadow-sm hover:shadow transition-shadow">
+                  {waitingTickets.map((ticket) => (
+                    <div
+                      key={ticket.id}
+                      className="p-4 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white shadow-sm hover:shadow transition-shadow"
+                    >
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase">
@@ -1389,7 +1812,8 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-bold mt-1">
-                          Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")}
+                          Model: {ticket.unitSepeda} — Servis:{" "}
+                          {ticket.serviceTypes.join(", ")}
                         </p>
                       </div>
 
@@ -1403,11 +1827,18 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                             <select
                               className="p-2 border border-slate-200 rounded-lg outline-none text-xs bg-slate-50 font-bold text-slate-700 w-44"
                               value={selectedMechanics[ticket.id] || ""}
-                              onChange={(e) => setSelectedMechanics(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                              onChange={(e) =>
+                                setSelectedMechanics((prev) => ({
+                                  ...prev,
+                                  [ticket.id]: e.target.value,
+                                }))
+                              }
                             >
                               <option value="">Pilih Mekanik PIC...</option>
-                              {mechanics.map(m => (
-                                <option key={m.id} value={m.name}>{m.name}</option>
+                              {mechanics.map((m) => (
+                                <option key={m.id} value={m.name}>
+                                  {m.name}
+                                </option>
                               ))}
                             </select>
 
@@ -1448,45 +1879,67 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
             <div className="space-y-6">
               <div className="bg-red-50 border border-red-100 p-4 rounded-2xl">
                 <h4 className="text-sm font-black text-red-950 uppercase tracking-tight flex items-center gap-2">
-                  <AlertCircle size={16} className="text-red-700 animate-pulse" /> 3. Review Anomali &amp; Pemindahan Sore (Selesai &lt; 5 Menit / Lewat 16:45)
+                  <AlertCircle
+                    size={16}
+                    className="text-red-700 animate-pulse"
+                  />{" "}
+                  3. Review Anomali &amp; Pemindahan Sore (Selesai &lt; 5 Menit
+                  / Lewat 16:45)
                 </h4>
                 <p className="text-xs text-red-700 mt-1 font-semibold leading-relaxed">
-                  Ditemukan kartu antrian dengan durasi di bawah 5 menit, ATAU kartu yang baru dipindahkan dari Menunggu ke Dikerjakan sore hari (lewat pukul 16:45). Hubungi admin/mekanik untuk menanyakan alasan, atau centang opsi "Telat Update" (otomatis bertagar <strong className="font-bold">TELAT_UPDATE_SELESAI</strong> atau <strong className="font-bold">TELAT_UPDATE_SERVICE</strong>).
+                  Ditemukan kartu antrian dengan durasi di bawah 5 menit, ATAU
+                  kartu yang baru dipindahkan dari Menunggu ke Dikerjakan sore
+                  hari (lewat pukul 16:45). Hubungi admin/mekanik untuk
+                  menanyakan alasan, atau centang opsi "Telat Update" (otomatis
+                  bertagar{" "}
+                  <strong className="font-bold">TELAT_UPDATE_SELESAI</strong>{" "}
+                  atau{" "}
+                  <strong className="font-bold">TELAT_UPDATE_SERVICE</strong>).
                 </p>
               </div>
 
               {anomalyTickets.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <CheckSquare className="text-emerald-500 mx-auto" size={32} />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Tidak ada kartu anomali durasi atau pemindahan sore harian!</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+                    Tidak ada kartu anomali durasi atau pemindahan sore harian!
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {anomalyTickets.map(ticket => {
+                  {anomalyTickets.map((ticket) => {
                     const isLateStart = isLateAfternoonStart(ticket);
-                    const isTraditional = ticket.flags?.includes("ANOMALI_DURASI_SERVICE" as any);
-                    
+                    const isTraditional = ticket.flags?.includes(
+                      "ANOMALI_DURASI_SERVICE" as any,
+                    );
+
                     let badgeLabel = "ANOMALI 5 MENIT";
                     let badgeColor = "bg-red-50 text-red-700 border-red-200";
                     if (isLateStart && isTraditional) {
                       badgeLabel = "ANOMALI GANDA (5M & SORE)";
-                      badgeColor = "bg-purple-50 text-purple-700 border-purple-200";
+                      badgeColor =
+                        "bg-purple-50 text-purple-700 border-purple-200";
                     } else if (isLateStart) {
                       badgeLabel = "PEMINDAHAN SORE (>= 16:45)";
-                      badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                      badgeColor =
+                        "bg-amber-50 text-amber-700 border-amber-200";
                     }
 
-                    const placeholderText = isLateStart 
-                      ? "Tuliskan alasan baru dikerjakan sore..." 
+                    const placeholderText = isLateStart
+                      ? "Tuliskan alasan baru dikerjakan sore..."
                       : "Tuliskan alasan durasi singkat...";
 
-                    const isSavedSaved = anomalySaved[ticket.id] || 
-                      ticket.flags?.includes("TELAT_UPDATE_SELESAI" as any) || 
-                      ticket.flags?.includes("TELAT_UPDATE_SERVICE" as any) || 
+                    const isSavedSaved =
+                      anomalySaved[ticket.id] ||
+                      ticket.flags?.includes("TELAT_UPDATE_SELESAI" as any) ||
+                      ticket.flags?.includes("TELAT_UPDATE_SERVICE" as any) ||
                       ticket.notes?.includes("[Reason:");
 
                     return (
-                      <div key={ticket.id} className="p-4 border border-slate-200/80 rounded-2xl flex flex-col justify-between gap-3 bg-white shadow-sm hover:shadow transition-shadow">
+                      <div
+                        key={ticket.id}
+                        className="p-4 border border-slate-200/80 rounded-2xl flex flex-col justify-between gap-3 bg-white shadow-sm hover:shadow transition-shadow"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="flex items-center gap-2">
@@ -1498,15 +1951,26 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 font-bold mt-1">
-                              Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")} — PIC: {ticket.mechanic || "Belum ada"}
+                              Model: {ticket.unitSepeda} — Servis:{" "}
+                              {ticket.serviceTypes.join(", ")} — PIC:{" "}
+                              {ticket.mechanic || "Belum ada"}
                             </p>
                             {isLateStart && ticket.timestamps?.called && (
                               <p className="text-[10px] text-amber-600 font-bold mt-0.5 uppercase tracking-tight">
-                                Mulai Kerja: {new Date(ticket.timestamps.called).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                                Mulai Kerja:{" "}
+                                {new Date(
+                                  ticket.timestamps.called,
+                                ).toLocaleTimeString("id-ID", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}{" "}
+                                WIB
                               </p>
                             )}
                           </div>
-                          <span className={`text-[10px] px-2 py-1 rounded font-black border uppercase tracking-tight ${badgeColor}`}>
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded font-black border uppercase tracking-tight ${badgeColor}`}
+                          >
                             {badgeLabel}
                           </span>
                         </div>
@@ -1517,17 +1981,27 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                               <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl text-xs font-black uppercase w-full justify-center">
                                 <Check size={16} /> Alasan Disimpan
                               </div>
-                              {ticket.notes && ticket.notes.includes("[Reason:") && (
-                                <p className="text-xs text-slate-500 font-bold mt-1.5">
-                                  Alasan: {ticket.notes.split("[Reason:").pop()?.replace("]", "").trim()}
-                                </p>
-                              )}
-                              {ticket.flags?.includes("TELAT_UPDATE_SELESAI" as any) && (
+                              {ticket.notes &&
+                                ticket.notes.includes("[Reason:") && (
+                                  <p className="text-xs text-slate-500 font-bold mt-1.5">
+                                    Alasan:{" "}
+                                    {ticket.notes
+                                      .split("[Reason:")
+                                      .pop()
+                                      ?.replace("]", "")
+                                      .trim()}
+                                  </p>
+                                )}
+                              {ticket.flags?.includes(
+                                "TELAT_UPDATE_SELESAI" as any,
+                              ) && (
                                 <p className="text-[10px] text-red-600 font-extrabold mt-1 uppercase">
                                   Tag Penalti: TELAT_UPDATE_SELESAI
                                 </p>
                               )}
-                              {ticket.flags?.includes("TELAT_UPDATE_SERVICE" as any) && (
+                              {ticket.flags?.includes(
+                                "TELAT_UPDATE_SERVICE" as any,
+                              ) && (
                                 <p className="text-[10px] text-amber-600 font-extrabold mt-1 uppercase">
                                   Tag Penalti: TELAT_UPDATE_SERVICE
                                 </p>
@@ -1542,7 +2016,12 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   placeholder={placeholderText}
                                   className="flex-1 p-2 text-xs border border-slate-200 rounded-lg outline-none bg-white font-semibold text-slate-800 disabled:opacity-55"
                                   value={anomalyReasons[ticket.id] || ""}
-                                  onChange={(e) => setAnomalyReasons(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                                  onChange={(e) =>
+                                    setAnomalyReasons((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: e.target.value,
+                                    }))
+                                  }
                                 />
                                 <label className="flex items-center gap-1 shrink-0 cursor-pointer select-none">
                                   <input
@@ -1550,18 +2029,29 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                     className="w-4 h-4 accent-slate-800 rounded border-slate-300"
                                     checked={!!anomalyTelatUpdate[ticket.id]}
                                     onChange={(e) => {
-                                      setAnomalyTelatUpdate(prev => ({ ...prev, [ticket.id]: e.target.checked }));
+                                      setAnomalyTelatUpdate((prev) => ({
+                                        ...prev,
+                                        [ticket.id]: e.target.checked,
+                                      }));
                                       if (e.target.checked) {
-                                        setAnomalyReasons(prev => ({ ...prev, [ticket.id]: "" }));
+                                        setAnomalyReasons((prev) => ({
+                                          ...prev,
+                                          [ticket.id]: "",
+                                        }));
                                       }
                                     }}
                                   />
-                                  <span className="text-[10px] font-bold text-slate-700 uppercase">Telat Update</span>
+                                  <span className="text-[10px] font-bold text-slate-700 uppercase">
+                                    Telat Update
+                                  </span>
                                 </label>
                               </div>
                               <button
                                 onClick={() => handleSaveAnomaly(ticket.id)}
-                                disabled={!anomalyTelatUpdate[ticket.id] && !anomalyReasons[ticket.id]}
+                                disabled={
+                                  !anomalyTelatUpdate[ticket.id] &&
+                                  !anomalyReasons[ticket.id]
+                                }
                                 className="bg-slate-900 hover:bg-black disabled:opacity-40 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shrink-0"
                               >
                                 Simpan Alasan
@@ -1577,8 +2067,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
               {unclearedAnomalies.length > 0 && (
                 <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-xl flex items-center gap-2.5 text-rose-800 text-xs font-black uppercase tracking-wider">
-                  <AlertCircle size={16} className="text-rose-600 animate-pulse" />
-                  <span>Sisa {unclearedAnomalies.length} Alasan Anomali Belum Disimpan</span>
+                  <AlertCircle
+                    size={16}
+                    className="text-rose-600 animate-pulse"
+                  />
+                  <span>
+                    Sisa {unclearedAnomalies.length} Alasan Anomali Belum
+                    Disimpan
+                  </span>
                 </div>
               )}
 
@@ -1604,24 +2100,35 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
             <div className="space-y-6">
               <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl">
                 <h4 className="text-sm font-black text-emerald-950 uppercase tracking-tight flex items-center gap-2">
-                  <CheckSquare size={16} /> 4. Konfirmasi Resi Fisik "Siap Diambil"
+                  <CheckSquare size={16} /> 4. Konfirmasi Resi Fisik "Siap
+                  Diambil"
                 </h4>
                 <p className="text-xs text-emerald-800 mt-1 font-semibold leading-relaxed">
-                  Harap verifikasi apakah lembaran resi fisik kelengkapan masih tergantung rapi pada sepedah di area "Siap Diambil". Centang opsi di bawah jika **resi fisik hilang** (otomatis bertagar <strong className="font-bold">RESI_HILANG</strong>).
+                  Harap verifikasi apakah lembaran resi fisik kelengkapan masih
+                  tergantung rapi pada sepedah di area "Siap Diambil". Centang
+                  opsi di bawah jika **resi fisik hilang** (otomatis bertagar{" "}
+                  <strong className="font-bold">RESI_HILANG</strong>).
                 </p>
               </div>
 
               {readyTickets.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <CheckSquare className="text-emerald-500 mx-auto" size={32} />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">Tidak ada sepeda di kolom Siap Diambil harian!</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-2">
+                    Tidak ada sepeda di kolom Siap Diambil harian!
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {readyTickets.map(ticket => {
-                    const isHilangDefault = ticket.flags?.includes("RESI_HILANG" as any);
+                  {readyTickets.map((ticket) => {
+                    const isHilangDefault = ticket.flags?.includes(
+                      "RESI_HILANG" as any,
+                    );
                     return (
-                      <div key={ticket.id} className="p-4 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white shadow-sm hover:shadow transition-shadow">
+                      <div
+                        key={ticket.id}
+                        className="p-4 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white shadow-sm hover:shadow transition-shadow"
+                      >
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded uppercase">
@@ -1632,23 +2139,39 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 font-bold mt-1">
-                            Model: {ticket.unitSepeda} — Servis: {ticket.serviceTypes.join(", ")}
+                            Model: {ticket.unitSepeda} — Servis:{" "}
+                            {ticket.serviceTypes.join(", ")}
                           </p>
                         </div>
 
                         <div className="w-full md:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                           {receiptSaved[ticket.id] ? (
                             <div className="flex items-center justify-center gap-1.5 text-emerald-600 bg-emerald-50 px-4 py-2.5 rounded-xl text-xs font-black uppercase border border-emerald-200">
-                              <Check size={16} /> Tersimpan ({(missingReceipts[ticket.id] !== undefined ? missingReceipts[ticket.id] : isHilangDefault) ? "RESI FISIK HILANG" : "RESI ADA"})
+                              <Check size={16} /> Tersimpan (
+                              {(
+                                missingReceipts[ticket.id] !== undefined
+                                  ? missingReceipts[ticket.id]
+                                  : isHilangDefault
+                              )
+                                ? "RESI FISIK HILANG"
+                                : "RESI ADA"}
+                              )
                             </div>
                           ) : (
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                               <div className="flex gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setMissingReceipts(prev => ({ ...prev, [ticket.id]: false }))}
+                                  onClick={() =>
+                                    setMissingReceipts((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: false,
+                                    }))
+                                  }
                                   className={`px-3 py-2.5 text-xs font-black rounded-xl uppercase flex items-center justify-center gap-1 border transition-all ${
-                                    (missingReceipts[ticket.id] === false || (missingReceipts[ticket.id] === undefined && !isHilangDefault))
+                                    missingReceipts[ticket.id] === false ||
+                                    (missingReceipts[ticket.id] === undefined &&
+                                      !isHilangDefault)
                                       ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-black shadow-sm"
                                       : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                                   }`}
@@ -1657,9 +2180,16 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setMissingReceipts(prev => ({ ...prev, [ticket.id]: true }))}
+                                  onClick={() =>
+                                    setMissingReceipts((prev) => ({
+                                      ...prev,
+                                      [ticket.id]: true,
+                                    }))
+                                  }
                                   className={`px-3 py-2.5 text-xs font-black rounded-xl uppercase flex items-center justify-center gap-1 border transition-all ${
-                                    (missingReceipts[ticket.id] === true || (missingReceipts[ticket.id] === undefined && isHilangDefault))
+                                    missingReceipts[ticket.id] === true ||
+                                    (missingReceipts[ticket.id] === undefined &&
+                                      isHilangDefault)
                                       ? "bg-rose-50 text-rose-700 border-rose-300 font-black shadow-sm"
                                       : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                                   }`}
@@ -1685,8 +2215,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
               {unclearedReceipts.length > 0 && (
                 <div className="bg-amber-50 border border-amber-250 p-3.5 rounded-xl flex items-center gap-2.5 text-amber-800 text-xs font-black uppercase tracking-wider">
-                  <AlertCircle size={16} className="text-amber-600 animate-pulse" />
-                  <span>Sisa {unclearedReceipts.length} Konfirmasi Resi Belum Disimpan</span>
+                  <AlertCircle
+                    size={16}
+                    className="text-amber-600 animate-pulse"
+                  />
+                  <span>
+                    Sisa {unclearedReceipts.length} Konfirmasi Resi Belum
+                    Disimpan
+                  </span>
                 </div>
               )}
 
@@ -1714,9 +2250,12 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 <Clock size={28} className="animate-pulse" />
               </div>
               <div className="space-y-2">
-                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">Setel Jadwal Overtime (Lembur)</h4>
+                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                  Setel Jadwal Overtime (Lembur)
+                </h4>
                 <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Apakah bengkel akan melanjutkan proses perbaikan lembur malam hari ini? Silakan pilih opsi operasional.
+                  Apakah bengkel akan melanjutkan proses perbaikan lembur malam
+                  hari ini? Silakan pilih opsi operasional.
                 </p>
               </div>
 
@@ -1732,7 +2271,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     }`}
                   >
                     <span className="text-3xl opacity-80">⚡</span>
-                    <strong className="text-sm font-black uppercase tracking-wide">Ya, Ada Overtime</strong>
+                    <strong className="text-sm font-black uppercase tracking-wide">
+                      Ya, Ada Overtime
+                    </strong>
                     {eligibleOvertimeTickets.length === 0 && (
                       <span className="text-[10px] font-black uppercase text-rose-500 tracking-wider mt-0.5">
                         (Tidak Ada Antrian Aktif)
@@ -1747,90 +2288,148 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     className="p-6 border-2 border-slate-200 hover:border-slate-800 hover:bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-700 hover:text-slate-900 transition-all active:scale-95 group"
                   >
                     <span className="text-3xl">🔒</span>
-                    <strong className="text-sm font-black uppercase tracking-wide">Tidak Ada Overtime</strong>
+                    <strong className="text-sm font-black uppercase tracking-wide">
+                      Tidak Ada Overtime
+                    </strong>
                   </button>
                 </div>
               ) : hasOvertimeToday === true ? (
                 <div className="space-y-6 text-left border-2 border-amber-100 rounded-3xl p-5 bg-amber-50/20">
                   <div>
-                    <h5 className="text-sm font-black text-amber-900 uppercase">Pilih Antrian Yang Dikerjakan Saat Overtime</h5>
+                    <h5 className="text-sm font-black text-amber-900 uppercase">
+                      Pilih Antrian Yang Dikerjakan Saat Overtime
+                    </h5>
                     <p className="text-xs text-amber-700 leading-relaxed font-semibold mt-1">
-                      Mekanik dan admin hanya dapat memproses antrian tertunda/lembur yang bersumber dari kolom "Menunggu" dan "Dikerjakan" saja. Jam pengerjaan (Dikerjakan) hanya akan aktif/ticking khusus untuk antrian lembur yang tercentang di bawah saat mode overtime aktif.
+                      Mekanik dan admin hanya dapat memproses antrian
+                      tertunda/lembur yang bersumber dari kolom "Menunggu" dan
+                      "Dikerjakan" saja. Jam pengerjaan (Dikerjakan) hanya akan
+                      aktif/ticking khusus untuk antrian lembur yang tercentang
+                      di bawah saat mode overtime aktif.
                     </p>
                   </div>
 
                   <div className="max-h-56 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-3 bg-white">
-                    {tickets.filter(t => t.status === "waiting" || t.status === "active" || t.status === "pending").length === 0 ? (
-                      <p className="text-xs text-slate-400 font-bold uppercase text-center py-4">Tidak ada antrian di kolom Menunggu, Dikerjakan, atau Tertunda.</p>
+                    {tickets.filter(
+                      (t) =>
+                        t.status === "waiting" ||
+                        t.status === "active" ||
+                        t.status === "pending",
+                    ).length === 0 ? (
+                      <p className="text-xs text-slate-400 font-bold uppercase text-center py-4">
+                        Tidak ada antrian di kolom Menunggu, Dikerjakan, atau
+                        Tertunda.
+                      </p>
                     ) : (
-                      tickets.filter(t => t.status === "waiting" || t.status === "active" || t.status === "pending").map(t => {
-                        const isChecked = selectedOvertimeTickets.includes(t.id);
-                        return (
-                          <div key={t.id} className="flex flex-col gap-2 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50/50">
-                            <label className="flex items-center gap-3 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                className="w-5 h-5 accent-slate-800 rounded border-slate-300"
-                                checked={isChecked}
-                                onChange={async (e) => {
-                                  if (e.target.checked) {
-                                    setSelectedOvertimeTickets(prev => [...prev, t.id]);
-                                  } else {
-                                    setSelectedOvertimeTickets(prev => prev.filter(x => x !== t.id));
-                                    try {
-                                      await updateTicketInCloud(t.id, { overtimeMechanic: null });
-                                    } catch (err) {
-                                      console.error("Failed to clear overtime mechanic:", err);
-                                    }
-                                  }
-                                }}
-                              />
-                              <div className="text-xs font-extrabold text-slate-850 flex-1">
-                                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded tracking-tight text-[10px] uppercase font-black">
-                                  #{t.ticketNumber || "NO"}
-                                </span>{" "}
-                                {t.customerName.toUpperCase()} — {t.unitSepeda.toUpperCase()} ({t.status === "active" ? "SEDANG DIKERJAKAN" : t.status === "pending" ? "TERTUNDA" : "MENUNGGU"})
-                              </div>
-                            </label>
-                            {isChecked && t.status === "waiting" && (
-                              <div className="pl-8 flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase text-amber-700 whitespace-nowrap">Mekanik PIC:</span>
-                                <select
-                                  value={t.overtimeMechanic || ""}
+                      tickets
+                        .filter(
+                          (t) =>
+                            t.status === "waiting" ||
+                            t.status === "active" ||
+                            t.status === "pending",
+                        )
+                        .map((t) => {
+                          const isChecked = selectedOvertimeTickets.includes(
+                            t.id,
+                          );
+                          return (
+                            <div
+                              key={t.id}
+                              className="flex flex-col gap-2 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50/50"
+                            >
+                              <label className="flex items-center gap-3 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  className="w-5 h-5 accent-slate-800 rounded border-slate-300"
+                                  checked={isChecked}
                                   onChange={async (e) => {
-                                    const val = e.target.value || null;
-                                    try {
-                                      await updateTicketInCloud(t.id, { overtimeMechanic: val });
-                                    } catch (err) {
-                                      console.error("Failed to set overtime mechanic PIC:", err);
+                                    if (e.target.checked) {
+                                      setSelectedOvertimeTickets((prev) => [
+                                        ...prev,
+                                        t.id,
+                                      ]);
+                                    } else {
+                                      setSelectedOvertimeTickets((prev) =>
+                                        prev.filter((x) => x !== t.id),
+                                      );
+                                      try {
+                                        await updateTicketInCloud(t.id, {
+                                          overtimeMechanic: null,
+                                        });
+                                      } catch (err) {
+                                        console.error(
+                                          "Failed to clear overtime mechanic:",
+                                          err,
+                                        );
+                                      }
                                     }
                                   }}
-                                  className={`text-xs font-bold border rounded-lg px-2.5 py-1 text-slate-800 outline-none flex-1 max-w-xs bg-white ${
-                                    !t.overtimeMechanic ? "border-rose-300 bg-rose-50/50" : "border-slate-200"
-                                  }`}
-                                >
-                                  <option value="">-- Pilih Mekanik PIC --</option>
-                                  {mechanics.map((m) => (
-                                    <option key={m.id} value={m.name}>
-                                      {m.name}
+                                />
+                                <div className="text-xs font-extrabold text-slate-850 flex-1">
+                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded tracking-tight text-[10px] uppercase font-black">
+                                    #{t.ticketNumber || "NO"}
+                                  </span>{" "}
+                                  {t.customerName.toUpperCase()} —{" "}
+                                  {t.unitSepeda.toUpperCase()} (
+                                  {t.status === "active"
+                                    ? "SEDANG DIKERJAKAN"
+                                    : t.status === "pending"
+                                      ? "TERTUNDA"
+                                      : "MENUNGGU"}
+                                  )
+                                </div>
+                              </label>
+                              {isChecked && t.status === "waiting" && (
+                                <div className="pl-8 flex items-center gap-2">
+                                  <span className="text-[10px] font-black uppercase text-amber-700 whitespace-nowrap">
+                                    Mekanik PIC:
+                                  </span>
+                                  <select
+                                    value={t.overtimeMechanic || ""}
+                                    onChange={async (e) => {
+                                      const val = e.target.value || null;
+                                      try {
+                                        await updateTicketInCloud(t.id, {
+                                          overtimeMechanic: val,
+                                        });
+                                      } catch (err) {
+                                        console.error(
+                                          "Failed to set overtime mechanic PIC:",
+                                          err,
+                                        );
+                                      }
+                                    }}
+                                    className={`text-xs font-bold border rounded-lg px-2.5 py-1 text-slate-800 outline-none flex-1 max-w-xs bg-white ${
+                                      !t.overtimeMechanic
+                                        ? "border-rose-300 bg-rose-50/50"
+                                        : "border-slate-200"
+                                    }`}
+                                  >
+                                    <option value="">
+                                      -- Pilih Mekanik PIC --
                                     </option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
+                                    {mechanics.map((m) => (
+                                      <option key={m.id} value={m.name}>
+                                        {m.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                     )}
                   </div>
 
                   {selectedOvertimeTickets.length === 0 ? (
                     <p className="text-xs text-rose-600 font-extrabold uppercase animate-pulse">
-                      ⚠️ Sesi Overtime harus memilih minimal 1 antrian yang akan dikerjakan.
+                      ⚠️ Sesi Overtime harus memilih minimal 1 antrian yang akan
+                      dikerjakan.
                     </p>
                   ) : !isOvertimeSelectionValid ? (
                     <p className="text-xs text-rose-600 font-extrabold uppercase animate-pulse">
-                      ⚠️ Harap pilih Mekanik PIC untuk semua antrian Menunggu yang dipilih untuk Overtime.
+                      ⚠️ Harap pilih Mekanik PIC untuk semua antrian Menunggu
+                      yang dipilih untuk Overtime.
                     </p>
                   ) : null}
 
@@ -1858,9 +2457,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 <div className="space-y-6 text-center border border-slate-200 rounded-3xl p-6 bg-slate-50/50">
                   <div className="text-3xl">🔒</div>
                   <div>
-                    <h5 className="text-sm font-black text-slate-800 uppercase">Tidak Ada Overtime Hari Ini</h5>
+                    <h5 className="text-sm font-black text-slate-800 uppercase">
+                      Tidak Ada Overtime Hari Ini
+                    </h5>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed mt-1 font-semibold">
-                      Anda memilih untuk menutup toko sepenuhnya tanpa pengerjaan lembur malam ini. Silakan klik tombol di bawah untuk melanjutkan ke pengisian laporan.
+                      Anda memilih untuk menutup toko sepenuhnya tanpa
+                      pengerjaan lembur malam ini. Silakan klik tombol di bawah
+                      untuk melanjutkan ke pengisian laporan.
                     </p>
                   </div>
                   <div className="flex gap-2 justify-center pt-2">
@@ -1904,7 +2507,8 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     <FileText size={16} /> Kompilasi Laporan Harian Sukses
                   </h4>
                   <p className="text-xs text-emerald-800 mt-1 font-semibold leading-relaxed">
-                    Evaluasi debrief selesai. Laporan performa WhatsApp siap dicopy ke grup management.
+                    Evaluasi debrief selesai. Laporan performa WhatsApp siap
+                    dicopy ke grup management.
                   </p>
                 </div>
                 {hasOvertimeToday && (
@@ -1915,7 +2519,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">Laporan WhatsApp Format</label>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Laporan WhatsApp Format
+                </label>
                 <textarea
                   readOnly
                   className="w-full text-xs font-bold leading-relaxed text-slate-800 p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-mono h-80"
@@ -1928,12 +2534,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   <button
                     onClick={copyToClipboard}
                     className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow ${
-                      copied 
-                        ? "bg-emerald-600 text-white" 
+                      copied
+                        ? "bg-emerald-600 text-white"
                         : "bg-slate-900 text-white hover:bg-black"
                     }`}
                   >
-                    <Clipboard size={16} /> {copied ? "Berhasil Di-copy!" : "Copy Laporan WA"}
+                    <Clipboard size={16} />{" "}
+                    {copied ? "Berhasil Di-copy!" : "Copy Laporan WA"}
                   </button>
                 </div>
 
@@ -1950,7 +2557,9 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                       onClick={handleFinalizeDebrief}
                       className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95"
                     >
-                      {hasOvertimeToday ? "🔋 MULAI OVERTIME & SELESAI" : "🔒 SELESAI & TUTUP TOKO"}
+                      {hasOvertimeToday
+                        ? "🔋 MULAI OVERTIME & SELESAI"
+                        : "🔒 SELESAI & TUTUP TOKO"}
                     </button>
                   )}
                 </div>
@@ -1967,13 +2576,16 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     <FileText size={16} /> Kompilasi Rekap Bulanan Sukses
                   </h4>
                   <p className="text-xs text-blue-800 mt-1 font-semibold leading-relaxed">
-                    Setiap tanggal 28, rekap bulanan performa servis dan tim digenerate untuk grup management.
+                    Setiap tanggal 28, rekap bulanan performa servis dan tim
+                    digenerate untuk grup management.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">Laporan Rekap Bulanan Format</label>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Laporan Rekap Bulanan Format
+                </label>
                 <textarea
                   readOnly
                   className="w-full text-xs font-bold leading-relaxed text-slate-800 p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-mono h-80"
@@ -1992,12 +2604,13 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   <button
                     onClick={copyMonthlyToClipboard}
                     className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow ${
-                      monthlyCopied 
-                        ? "bg-emerald-600 text-white" 
+                      monthlyCopied
+                        ? "bg-emerald-600 text-white"
                         : "bg-slate-900 text-white hover:bg-black"
                     }`}
                   >
-                    <Clipboard size={16} /> {monthlyCopied ? "Berhasil Di-copy!" : "Copy Rekap Bulanan"}
+                    <Clipboard size={16} />{" "}
+                    {monthlyCopied ? "Berhasil Di-copy!" : "Copy Rekap Bulanan"}
                   </button>
                 </div>
 
@@ -2006,13 +2619,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     onClick={handleFinalizeDebrief}
                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95"
                   >
-                    {hasOvertimeToday ? "🔋 MULAI OVERTIME & SELESAI" : "🔒 SELESAI & TUTUP TOKO"}
+                    {hasOvertimeToday
+                      ? "🔋 MULAI OVERTIME & SELESAI"
+                      : "🔒 SELESAI & TUTUP TOKO"}
                   </button>
                 </div>
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>

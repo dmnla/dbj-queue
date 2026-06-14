@@ -27,7 +27,10 @@ import {
   StorageRequest,
   flag_type,
 } from "../types";
-import { formatTime, uploadFollowUpScreenshot } from "../services/ticketService";
+import {
+  formatTime,
+  uploadFollowUpScreenshot,
+} from "../services/ticketService";
 
 const normalizeOrderId = (id: string | null | undefined): string => {
   if (!id) return "";
@@ -267,7 +270,8 @@ export const CustomerSearchInput = ({
       )}
     </div>
   );
-};export const CreateTicketModal = ({
+};
+export const CreateTicketModal = ({
   isOpen,
   onClose,
   services,
@@ -280,28 +284,41 @@ export const CustomerSearchInput = ({
   onIgnoreDealposId,
   initialManualTicketId,
 }: any) => {
-  const [dealposStep, setDealposStep] = useState<"fetch" | "select-order" | "configure-booking" | "manual">("fetch");
-  const [connectionMode, setConnectionMode] = useState<"new" | "connect">("new");
-  const [selectedManualTicketId, setSelectedManualTicketId] = useState<string>("");
+  const [dealposStep, setDealposStep] = useState<
+    "fetch" | "select-order" | "configure-booking" | "manual"
+  >("fetch");
+  const [connectionMode, setConnectionMode] = useState<"new" | "connect">(
+    "new",
+  );
+  const [selectedManualTicketId, setSelectedManualTicketId] =
+    useState<string>("");
   const [dealposOrders, setDealposOrders] = useState<any[]>([]);
-  const [selectedDealposOrder, setSelectedDealposOrder] = useState<any | null>(null);
+  const [selectedDealposOrder, setSelectedDealposOrder] = useState<any | null>(
+    null,
+  );
   const [isLoadingDealpos, setIsLoadingDealpos] = useState(false);
   const [dealposError, setDealposError] = useState<string | null>(null);
   const [dealposSearch, setDealposSearch] = useState("");
   const [dealposCustomerName, setDealposCustomerName] = useState("");
   const [dealposPhone, setDealposPhone] = useState("");
-  const [confirmIgnoreOrderId, setConfirmIgnoreOrderId] = useState<string | null>(null);
+  const [confirmIgnoreOrderId, setConfirmIgnoreOrderId] = useState<
+    string | null
+  >(null);
 
-  const [bikesConfig, setBikesConfig] = useState<Array<{
-    id: number;
-    unit: string;
-    phone: string;
-    servicesSelected: string[];
-    notes: string;
-  }>>([]);
+  const [bikesConfig, setBikesConfig] = useState<
+    Array<{
+      id: number;
+      unit: string;
+      phone: string;
+      servicesSelected: string[];
+      notes: string;
+    }>
+  >([]);
 
   // States for Manual Creating
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null,
+  );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [unit, setUnit] = useState("");
@@ -323,7 +340,9 @@ export const CustomerSearchInput = ({
     Variants?: any[];
     Created?: string | null;
   } | null>(null);
-  const [recSelectedOrderID, setRecSelectedOrderID] = useState<string | null>(null);
+  const [recSelectedOrderID, setRecSelectedOrderID] = useState<string | null>(
+    null,
+  );
 
   const handleRecSearchInvoice = async () => {
     if (!recInvoiceInput.trim()) return;
@@ -331,19 +350,35 @@ export const CustomerSearchInput = ({
     setRecSelectedOrderID(null);
     try {
       const cleanNum = recInvoiceInput.trim().replace(/^#+/, "");
-      const res = await fetch(`/api/dealpos?branch=${currentBranch}&invoiceNumber=${encodeURIComponent(cleanNum)}`);
+      const res = await fetch(
+        `/api/dealpos?branch=${currentBranch}&invoiceNumber=${encodeURIComponent(cleanNum)}`,
+      );
       if (!res.ok) {
-        throw new Error(`Invoice tidak ditemukan atau DealPOS error. (Status ${res.status})`);
+        throw new Error(
+          `Invoice tidak ditemukan atau DealPOS error. (Status ${res.status})`,
+        );
       }
       const data = await res.json();
       const num = data.Number;
-      const custName = data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
+      const custName =
+        data.Customer?.Name || data.CustomerName || "Nama Tidak Diketahui";
       const phoneVal = data.Customer?.Phone || data.Customer?.Cell || "";
-      
-      const formattedNum = num ? (String(num).startsWith("#") ? String(num) : `#${String(num)}`) : "";
-      const orderId = formattedNum || data.InvoiceID || data.OrderID || data.invoiceId || data.orderId || "";
-      const createdTime = data.Created || data.Date || data.created || data.date || null;
-      
+
+      const formattedNum = num
+        ? String(num).startsWith("#")
+          ? String(num)
+          : `#${String(num)}`
+        : "";
+      const orderId =
+        formattedNum ||
+        data.InvoiceID ||
+        data.OrderID ||
+        data.invoiceId ||
+        data.orderId ||
+        "";
+      const createdTime =
+        data.Created || data.Date || data.created || data.date || null;
+
       if (!orderId) {
         throw new Error("DealPOS API tidak mengembalikan ID invoice/order.");
       }
@@ -356,14 +391,14 @@ export const CustomerSearchInput = ({
         CustomerName: custName,
         Phone: phoneVal,
         Variants: data.Variants || data.variants || [],
-        Created: createdTime
+        Created: createdTime,
       });
       setRecSelectedOrderID(orderId);
     } catch (e: any) {
       setRecInvoiceResult({
         loading: false,
         found: false,
-        error: e.message || "Unknown error searching invoice"
+        error: e.message || "Unknown error searching invoice",
       });
     }
   };
@@ -371,24 +406,39 @@ export const CustomerSearchInput = ({
   const handleRecConnectSubmit = async () => {
     if (!initialManualTicketId || !recSelectedOrderID || !onConnect) return;
     try {
-      const custName = recInvoiceResult?.found ? recInvoiceResult.CustomerName : (dealposOrders.find(o => o.OrderID === recSelectedOrderID)?.Customer || reconcilingTicket?.customerName || "Unknown");
-      const phoneNum = recInvoiceResult?.found ? recInvoiceResult.Phone : (dealposOrders.find(o => o.OrderID === recSelectedOrderID)?.Phone || reconcilingTicket?.phone || "");
-      
+      const custName = recInvoiceResult?.found
+        ? recInvoiceResult.CustomerName
+        : dealposOrders.find((o) => o.OrderID === recSelectedOrderID)
+            ?.Customer ||
+          reconcilingTicket?.customerName ||
+          "Unknown";
+      const phoneNum = recInvoiceResult?.found
+        ? recInvoiceResult.Phone
+        : dealposOrders.find((o) => o.OrderID === recSelectedOrderID)?.Phone ||
+          reconcilingTicket?.phone ||
+          "";
+
       // Determine SKU codes of the connected DealPOS order
       const skuCodes: string[] = [];
-      const orderFromList = dealposOrders.find(o => o.OrderID === recSelectedOrderID);
-      const variants = recInvoiceResult?.found ? (recInvoiceResult.Variants || []) : (orderFromList?.Variants || orderFromList?.variants || []);
-      
+      const orderFromList = dealposOrders.find(
+        (o) => o.OrderID === recSelectedOrderID,
+      );
+      const variants = recInvoiceResult?.found
+        ? recInvoiceResult.Variants || []
+        : orderFromList?.Variants || orderFromList?.variants || [];
+
       variants.forEach((v: any) => {
         const code = v.Code || v.ItemID || "";
         if (code) skuCodes.push(code);
       });
 
       const flags: flag_type[] = [];
-      const createdStr = recInvoiceResult?.found ? recInvoiceResult.Created : orderFromList?.Created;
+      const createdStr = recInvoiceResult?.found
+        ? recInvoiceResult.Created
+        : orderFromList?.Created;
       if (createdStr) {
         const createdTimestamp = new Date(createdStr).getTime();
-        const referenceTime = reconcilingTicket?.timestamps?.arrival 
+        const referenceTime = reconcilingTicket?.timestamps?.arrival
           ? new Date(reconcilingTicket.timestamps.arrival).getTime()
           : Date.now();
         const diffMs = referenceTime - createdTimestamp;
@@ -398,7 +448,15 @@ export const CustomerSearchInput = ({
         }
       }
 
-      onConnect(initialManualTicketId, recSelectedOrderID, custName, phoneNum, skuCodes, flags, orderFromList?.Number || recInvoiceResult?.Number || recSelectedOrderID);
+      onConnect(
+        initialManualTicketId,
+        recSelectedOrderID,
+        custName,
+        phoneNum,
+        skuCodes,
+        flags,
+        orderFromList?.Number || recInvoiceResult?.Number || recSelectedOrderID,
+      );
       onClose();
       // Reset rec states
       setRecSearchQuery("");
@@ -418,7 +476,7 @@ export const CustomerSearchInput = ({
 
   const serviceNames = useMemo(
     () => services.map((s: any) => s.name),
-    [services]
+    [services],
   );
 
   const fetchDealposOrders = async () => {
@@ -430,7 +488,10 @@ export const CustomerSearchInput = ({
 
       if (!ordersRes.ok) {
         const errorData = await ordersRes.json().catch(() => ({}));
-        throw new Error(errorData.error || `Gagal mengambil data pesanan DEALPOS (HTTP STATUS: ${ordersRes.status})`);
+        throw new Error(
+          errorData.error ||
+            `Gagal mengambil data pesanan DEALPOS (HTTP STATUS: ${ordersRes.status})`,
+        );
       }
 
       const ordersData = await ordersRes.json();
@@ -442,15 +503,25 @@ export const CustomerSearchInput = ({
 
       for (const entry of rawData) {
         const rawNum = entry.Number || entry.ParkLabel || "";
-        const formattedNum = rawNum ? (String(rawNum).startsWith("#") ? String(rawNum) : `#${String(rawNum)}`) : "";
+        const formattedNum = rawNum
+          ? String(rawNum).startsWith("#")
+            ? String(rawNum)
+            : `#${String(rawNum)}`
+          : "";
         const orderId = formattedNum || entry.OrderID;
         if (!orderId) continue;
 
         if (!groups[orderId]) {
           groups[orderId] = {
             OrderID: orderId,
+            dealposGuid: entry.OrderID || "",
             Customer: entry.Customer || "UNKNOWN",
-            Phone: entry.Phone || entry.Contact || entry.CustomerContact || entry.CustomerMobile || "",
+            Phone:
+              entry.Phone ||
+              entry.Contact ||
+              entry.CustomerContact ||
+              entry.CustomerMobile ||
+              "",
             ParkLabel: entry.ParkLabel || "",
             Created: entry.Created || "",
             Number: entry.Number || entry.ParkLabel || "",
@@ -473,8 +544,12 @@ export const CustomerSearchInput = ({
       // Filter: at least one variant starts with "DBJS"
       const eligibleGroups = Object.values(groups).filter((g: any) => {
         return g.Variants.some((v: any) => {
-          const code = String(v.Code || "").trim().toUpperCase();
-          const itemId = String(v.ItemID || "").trim().toUpperCase();
+          const code = String(v.Code || "")
+            .trim()
+            .toUpperCase();
+          const itemId = String(v.ItemID || "")
+            .trim()
+            .toUpperCase();
           return code.startsWith("DBJS") || itemId.startsWith("DBJS");
         });
       });
@@ -482,32 +557,41 @@ export const CustomerSearchInput = ({
       // Filter out OrderIDs that have already reached their maximum imported ticket count or are ignored
       const dealposTicketCounts: { [orderId: string]: number } = {};
       (tickets || []).forEach((t: any) => {
-        if (t.dealposOrderId && t.status !== "cancelled") {
-          const key = normalizeOrderId(t.dealposOrderId);
-          dealposTicketCounts[key] = (dealposTicketCounts[key] || 0) + 1;
+        if (t.status !== "cancelled") {
+          const keys: string[] = [];
+          if (t.dealposOrderId) {
+            keys.push(normalizeOrderId(t.dealposOrderId));
+          }
+          if (t.dealposOrderNumber) {
+            keys.push(normalizeOrderId(t.dealposOrderNumber));
+          }
+          const uniqueKeys = Array.from(new Set(keys));
+          uniqueKeys.forEach((k) => {
+            dealposTicketCounts[k] = (dealposTicketCounts[k] || 0) + 1;
+          });
         }
       });
-      const ignoredIdsSet = new Set((ignoredDealposIds || []).map((id: any) => normalizeOrderId(id)));
+      const ignoredIdsSet = new Set(
+        (ignoredDealposIds || []).map((id: any) => normalizeOrderId(id)),
+      );
 
       const finalGroupedOrders = eligibleGroups.filter((g: any) => {
         const normGroupID = normalizeOrderId(g.OrderID);
-        if (ignoredIdsSet.has(normGroupID)) return false;
+        const normGroupNum = normalizeOrderId(g.Number || g.ParkLabel);
+        const normGuid = normalizeOrderId(g.dealposGuid);
+        if (
+          ignoredIdsSet.has(normGroupID) ||
+          (normGroupNum && ignoredIdsSet.has(normGroupNum)) ||
+          (normGuid && ignoredIdsSet.has(normGuid))
+        )
+          return false;
 
-        let totalAllowedTickets = 0;
-        if (g.Variants) {
-          g.Variants.forEach((v: any) => {
-            const code = String(v.Code || "").trim().toUpperCase();
-            const itemId = String(v.ItemID || "").trim().toUpperCase();
-            if (code.startsWith("DBJS") || itemId.startsWith("DBJS")) {
-              const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
-              totalAllowedTickets += qty;
-            }
-          });
-        }
-        if (totalAllowedTickets === 0) totalAllowedTickets = 1;
-
-        const currentCount = dealposTicketCounts[normGroupID] || 0;
-        return currentCount < totalAllowedTickets;
+        const currentCount =
+          (normGuid ? dealposTicketCounts[normGuid] || 0 : 0) ||
+          dealposTicketCounts[normGroupID] ||
+          0 ||
+          (normGroupNum ? dealposTicketCounts[normGroupNum] || 0 : 0);
+        return currentCount === 0;
       });
 
       setDealposOrders(finalGroupedOrders);
@@ -561,7 +645,14 @@ export const CustomerSearchInput = ({
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && phone.trim() && selectedServices.length > 0 && unit) {
-      onAdd(name, phone.trim(), unit, selectedServices, notes, selectedCustomer?.id);
+      onAdd(
+        name,
+        phone.trim(),
+        unit,
+        selectedServices,
+        notes,
+        selectedCustomer?.id,
+      );
       onClose();
       setName("");
       setPhone("");
@@ -610,11 +701,12 @@ export const CustomerSearchInput = ({
   };
 
   const handleBikesCountChange = (count: number) => {
-    const dbjsServices = selectedDealposOrder?.Variants.filter((v: any) => {
-      const code = v.Code || "";
-      const itemId = v.ItemID || "";
-      return code.startsWith("DBJS") || itemId.startsWith("DBJS");
-    }) || [];
+    const dbjsServices =
+      selectedDealposOrder?.Variants.filter((v: any) => {
+        const code = v.Code || "";
+        const itemId = v.ItemID || "";
+        return code.startsWith("DBJS") || itemId.startsWith("DBJS");
+      }) || [];
 
     setBikesConfig((prev) => {
       const next = [...prev];
@@ -652,7 +744,9 @@ export const CustomerSearchInput = ({
 
         const flags: flag_type[] = [];
         if (selectedDealposOrder.Created) {
-          const createdTimestamp = new Date(selectedDealposOrder.Created).getTime();
+          const createdTimestamp = new Date(
+            selectedDealposOrder.Created,
+          ).getTime();
           const diffMs = Date.now() - createdTimestamp;
           const diffMinutes = diffMs / (1000 * 60);
           if (diffMinutes > 15) {
@@ -667,13 +761,15 @@ export const CustomerSearchInput = ({
           dealposPhone,
           skuCodes,
           flags,
-          selectedDealposOrder.Number
+          selectedDealposOrder.Number,
         );
       }
     } else {
       const flags: flag_type[] = [];
       if (selectedDealposOrder.Created) {
-        const createdTimestamp = new Date(selectedDealposOrder.Created).getTime();
+        const createdTimestamp = new Date(
+          selectedDealposOrder.Created,
+        ).getTime();
         const diffMs = Date.now() - createdTimestamp;
         const diffMinutes = diffMs / (1000 * 60);
         if (diffMinutes > 15) {
@@ -686,7 +782,9 @@ export const CustomerSearchInput = ({
         const skuCodes: string[] = [];
         if (bike.servicesSelected && selectedDealposOrder.Variants) {
           bike.servicesSelected.forEach((sName: string) => {
-            const matched = selectedDealposOrder.Variants.find((v: any) => v.Name === sName);
+            const matched = selectedDealposOrder.Variants.find(
+              (v: any) => v.Name === sName,
+            );
             if (matched) {
               const code = matched.Code || matched.ItemID || "";
               if (code) skuCodes.push(code);
@@ -704,7 +802,7 @@ export const CustomerSearchInput = ({
           selectedDealposOrder.OrderID,
           flags,
           skuCodes,
-          selectedDealposOrder.Number
+          selectedDealposOrder.Number,
         );
       }
     }
@@ -749,24 +847,30 @@ export const CustomerSearchInput = ({
           ? b.servicesSelected.filter((s) => s !== serviceName)
           : [...b.servicesSelected, serviceName];
         return { ...b, servicesSelected: newSvcs };
-      })
+      }),
     );
   };
 
   return (
-    <ModalBase 
+    <ModalBase
       title={
         reconcilingTicket
           ? `Hubungkan ke DEALPOS (Rekonsiliasi)`
-          : dealposStep === "manual" 
-          ? "Buat Tiket Baru (Manual)" 
-          : dealposStep === "configure-booking"
-          ? "Konfigurasi Antrian"
-          : `Tambah Pelanggan (${activeBranchLabel})`
-      } 
-      isOpen={isOpen} 
+          : dealposStep === "manual"
+            ? "Buat Tiket Baru (Manual)"
+            : dealposStep === "configure-booking"
+              ? "Konfigurasi Antrian"
+              : `Tambah Pelanggan (${activeBranchLabel})`
+      }
+      isOpen={isOpen}
       onClose={onClose}
-      maxWidth={reconcilingTicket ? "max-w-md" : dealposStep === "configure-booking" ? "max-w-2xl" : "max-w-lg"}
+      maxWidth={
+        reconcilingTicket
+          ? "max-w-md"
+          : dealposStep === "configure-booking"
+            ? "max-w-2xl"
+            : "max-w-lg"
+      }
     >
       {reconcilingTicket ? (
         <div className="space-y-5">
@@ -774,21 +878,26 @@ export const CustomerSearchInput = ({
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black bg-slate-200 text-slate-800 px-2 py-0.5 rounded uppercase font-mono">
-                #{reconcilingTicket.ticketNumber || reconcilingTicket.id.slice(-4)}
+                #
+                {reconcilingTicket.ticketNumber ||
+                  reconcilingTicket.id.slice(-4)}
               </span>
               <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
                 {reconcilingTicket.customerName}
               </span>
             </div>
             <p className="text-xs text-slate-500 font-bold mt-1">
-              Model: {reconcilingTicket.unitSepeda} — Servis: {reconcilingTicket.serviceTypes.join(", ")}
+              Model: {reconcilingTicket.unitSepeda} — Servis:{" "}
+              {reconcilingTicket.serviceTypes.join(", ")}
             </p>
           </div>
 
           <div className="space-y-4">
             {/* OPTION A: Search & Dropdown for Open Parked Orders */}
             <div className="space-y-1.5 relative">
-              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi A: Cari & Pilih Tagihan Terbuka (Parked Order)</span>
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
+                Opsi A: Cari & Pilih Tagihan Terbuka (Parked Order)
+              </span>
               <div className="relative flex items-center">
                 <input
                   type="text"
@@ -838,40 +947,56 @@ export const CustomerSearchInput = ({
               {/* Suggestions dropdown list */}
               {recDropdownOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => setRecDropdownOpen(false)}
                   />
                   <div className="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-lg divide-y divide-slate-100 mt-1">
                     {(() => {
                       const isPreVal = recSearchQuery.startsWith("#");
-                      const q = isPreVal ? "" : recSearchQuery.toLowerCase().trim();
-                      const matches = dealposOrders.filter(o => 
-                        !q ||
-                        (o.Number || "").toLowerCase().includes(q) ||
-                        (o.Customer || "").toLowerCase().includes(q) ||
-                        (o.ParkLabel || "").toLowerCase().includes(q)
+                      const q = isPreVal
+                        ? ""
+                        : recSearchQuery.toLowerCase().trim();
+                      const matches = dealposOrders.filter(
+                        (o) =>
+                          !q ||
+                          (o.Number || "").toLowerCase().includes(q) ||
+                          (o.Customer || "").toLowerCase().includes(q) ||
+                          (o.ParkLabel || "").toLowerCase().includes(q),
                       );
-                      
+
                       if (matches.length === 0) {
-                        return <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">Tidak ada kecocokan</div>;
+                        return (
+                          <div className="p-3 text-[11px] font-bold text-slate-400 uppercase text-center">
+                            Tidak ada kecocokan
+                          </div>
+                        );
                       }
-                      return matches.map(o => {
-                        const dispId = String(o.OrderID).startsWith("#") ? String(o.OrderID) : `#${String(o.OrderID)}`;
+                      return matches.map((o) => {
+                        const dispId = String(o.OrderID).startsWith("#")
+                          ? String(o.OrderID)
+                          : `#${String(o.OrderID)}`;
                         return (
                           <button
                             key={o.OrderID}
                             type="button"
                             onClick={() => {
                               setRecSelectedOrderID(o.OrderID);
-                              setRecSearchQuery(`${dispId} - ${o.Customer || o.ParkLabel || "No Name"}`);
+                              setRecSearchQuery(
+                                `${dispId} - ${o.Customer || o.ParkLabel || "No Name"}`,
+                              );
                               setRecDropdownOpen(false);
                               setRecInvoiceResult(null); // Clear Option B result
                             }}
                             className="w-full p-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center"
                           >
-                            <span>{dispId} - {o.Customer || o.ParkLabel || "No Name"}</span>
-                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">Pilih</span>
+                            <span>
+                              {dispId} -{" "}
+                              {o.Customer || o.ParkLabel || "No Name"}
+                            </span>
+                            <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                              Pilih
+                            </span>
                           </button>
                         );
                       });
@@ -883,7 +1008,9 @@ export const CustomerSearchInput = ({
 
             {/* OPTION B: Search Invoice backup */}
             <div className="space-y-1.5">
-              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Opsi B: Cari No. Invoice (Final/Paid Backup)</span>
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
+                Opsi B: Cari No. Invoice (Final/Paid Backup)
+              </span>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -895,7 +1022,9 @@ export const CustomerSearchInput = ({
                 <button
                   type="button"
                   onClick={handleRecSearchInvoice}
-                  disabled={!recInvoiceInput.trim() || recInvoiceResult?.loading}
+                  disabled={
+                    !recInvoiceInput.trim() || recInvoiceResult?.loading
+                  }
                   className="px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center shrink-0 min-w-[70px]"
                 >
                   {recInvoiceResult?.loading ? "..." : "Cari"}
@@ -905,16 +1034,24 @@ export const CustomerSearchInput = ({
               {recInvoiceResult && (
                 <div className="text-[11px] font-bold p-3 rounded-xl border mt-1">
                   {recInvoiceResult.loading && (
-                    <div className="text-slate-500 animate-pulse uppercase">🔍 SEDANG MENCARI INVOICE...</div>
+                    <div className="text-slate-500 animate-pulse uppercase">
+                      🔍 SEDANG MENCARI INVOICE...
+                    </div>
                   )}
                   {recInvoiceResult.error && (
-                    <div className="text-rose-600 uppercase">❌ {recInvoiceResult.error}</div>
+                    <div className="text-rose-600 uppercase">
+                      ❌ {recInvoiceResult.error}
+                    </div>
                   )}
                   {recInvoiceResult.found && (
                     <div className="text-emerald-600 uppercase flex flex-col gap-0.5">
                       <span className="font-black">✅ INVOICE DITEMUKAN:</span>
-                      <span className="text-slate-800 font-bold font-mono">No: #{recInvoiceResult.Number}</span>
-                      <span className="text-slate-800 font-bold">Nama: {recInvoiceResult.CustomerName?.toUpperCase()}</span>
+                      <span className="text-slate-800 font-bold font-mono">
+                        No: #{recInvoiceResult.Number}
+                      </span>
+                      <span className="text-slate-800 font-bold">
+                        Nama: {recInvoiceResult.CustomerName?.toUpperCase()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -944,585 +1081,706 @@ export const CustomerSearchInput = ({
         </div>
       ) : (
         <>
-
-      {dealposStep === "fetch" && (
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-          <div className="space-y-1">
-            <h4 className="font-extrabold text-slate-800 text-base uppercase tracking-wider">Menghubungkan DEALPOS</h4>
-            <p className="text-sm text-slate-500 font-medium">Mengunduh daftar order aktif dari cabang {activeBranchLabel}...</p>
-          </div>
-        </div>
-      )}
-
-      {dealposStep === "select-order" && (
-        <div className="flex flex-col space-y-4 overflow-hidden max-h-[75vh]">
-          {dealposError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3">
-              <AlertCircle className="shrink-0 text-red-500 mt-0.5" size={18} />
-              <div className="text-xs">
-                <p className="font-bold uppercase tracking-wider mb-0.5">Koneksi DEALPOS Bermasalah</p>
-                <p className="opacity-90">{dealposError}</p>
-                <button 
-                  onClick={fetchDealposOrders}
-                  className="mt-2 text-red-800 hover:text-red-900 font-black hover:underline uppercase tracking-wider flex items-center gap-1"
-                >
-                  Coba Sinkron Ulang
-                </button>
+          {dealposStep === "fetch" && (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center space-y-4">
+              <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-slate-800 text-base uppercase tracking-wider">
+                  Menghubungkan DEALPOS
+                </h4>
+                <p className="text-sm text-slate-500 font-medium">
+                  Mengunduh daftar order aktif dari cabang {activeBranchLabel}
+                  ...
+                </p>
               </div>
             </div>
           )}
 
-          <div className="flex gap-2 items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Cari nama pelanggan / nomor order..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 text-slate-900 border-2 border-slate-100 rounded-xl outline-none font-medium text-sm focus:border-slate-300 transition-all font-sans"
-                value={dealposSearch}
-                onChange={(e) => setDealposSearch(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => {
-                setName("");
-                setPhone("");
-                setUnit("");
-                setSelectedServices([]);
-                setNotes("");
-                setSelectedCustomer(null);
-                setDealposStep("manual");
-              }}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider shrink-0 transition-colors"
-            >
-              Mode Manual
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
-            <h5 className="text-[10px] uppercase tracking-widest text-slate-400 font-extrabold pb-1">
-              Daftar Pesanan DEALPOS yang dapat Diimpor ({filteredDealposOrders.length})
-            </h5>
-            {isLoadingDealpos ? (
-              <div className="flex items-center justify-center py-12 gap-2 text-slate-500 text-sm font-bold">
-                <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                Menyinkronkan...
-              </div>
-            ) : filteredDealposOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
-                <UserCog size={36} className="text-slate-300 mb-2 animate-pulse" />
-                <p className="text-xs font-bold leading-relaxed px-4">Tidak ada pesanan parkir DEALPOS aktif dengan kode servis DBJS yang belum diimpor.</p>
-              </div>
-            ) : (
-              <div className="space-y-2 pt-2">
-                {filteredDealposOrders.map((order) => {
-                  const dbjsList = order.Variants.filter((v: any) => {
-                    const code = v.Code || "";
-                    const itemId = v.ItemID || "";
-                    return code.startsWith("DBJS") || itemId.startsWith("DBJS");
-                  });
-
-                  return (
-                    <div 
-                      key={order.OrderID}
-                      className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-300 cursor-pointer transition-all flex flex-col sm:flex-row justify-between sm:items-center gap-3 hover:shadow-sm"
-                      onClick={() => handleSelectOrder(order)}
+          {dealposStep === "select-order" && (
+            <div className="flex flex-col space-y-4 overflow-hidden max-h-[75vh]">
+              {dealposError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3">
+                  <AlertCircle
+                    className="shrink-0 text-red-500 mt-0.5"
+                    size={18}
+                  />
+                  <div className="text-xs">
+                    <p className="font-bold uppercase tracking-wider mb-0.5">
+                      Koneksi DEALPOS Bermasalah
+                    </p>
+                    <p className="opacity-90">{dealposError}</p>
+                    <button
+                      onClick={fetchDealposOrders}
+                      className="mt-2 text-red-800 hover:text-red-900 font-black hover:underline uppercase tracking-wider flex items-center gap-1"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full tracking-wider uppercase">
-                            #{order.Number}
-                          </span>
-                          <span className="text-xs text-slate-400 font-mono">
-                            {order.Created ? new Date(order.Created).toLocaleDateString("id-ID", { hour: "2-digit", minute: "2-digit" }) : ""}
-                          </span>
-                        </div>
-                        <h4 className="font-extrabold text-slate-800 text-sm uppercase">
-                          {order.Customer || "Unknown"}
-                        </h4>
-                        {order.ParkLabel && (
-                          <p className="text-xs text-slate-500 font-bold">
-                            Label: {order.ParkLabel}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {dbjsList.map((v: any, idx: number) => {
-                            const qty = Number(v.Quantity || v.quantity || v.Qty || v.qty || 1);
-                            const qtyDisplay = qty > 1 ? ` (x${qty})` : "";
-                            return (
-                              <span key={idx} className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold">
-                                {v.Name}{qtyDisplay}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 self-end sm:self-center">
-                        {confirmIgnoreOrderId === order.OrderID ? (
-                          <div className="bg-red-50 border border-red-200 p-2 rounded-xl flex items-center gap-2">
-                            <span className="text-[10px] font-extrabold text-red-700 uppercase tracking-tight">Yakin sembunyikan order ini?</span>
-                            <button
-                              type="button"
-                              className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onIgnoreDealposId) {
-                                  onIgnoreDealposId(order.OrderID);
-                                }
-                                setDealposOrders(prev => prev.filter(o => o.OrderID !== order.OrderID));
-                                setConfirmIgnoreOrderId(null);
-                              }}
-                            >
-                              Ya
-                            </button>
-                            <button
-                              type="button"
-                              className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setConfirmIgnoreOrderId(null);
-                              }}
-                            >
-                              Batal
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <button 
-                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-black uppercase px-3 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setConfirmIgnoreOrderId(order.OrderID);
-                              }}
-                            >
-                              Bukan Service
-                            </button>
-                            <button 
-                              className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-4 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectOrder(order);
-                              }}
-                            >
-                              Pilih
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {dealposStep === "configure-booking" && selectedDealposOrder && (
-        <form onSubmit={handleConfirmDealposBooking} className="space-y-4 overflow-hidden max-h-[80vh] flex flex-col">
-          <div className="bg-slate-50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 shrink-0">
-            <div className="flex-1 space-y-3">
-              <div>
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Info Pelanggan & Pesanan</p>
-                <p className="text-xs text-slate-500 font-bold mb-2 cursor-default">#{selectedDealposOrder.Number} - {selectedDealposOrder.ParkLabel}</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
-                      Nama Pelanggan
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
-                      value={dealposCustomerName}
-                      onChange={(e) => setDealposCustomerName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
-                      Nomor Telepon <span className="text-red-500 font-black">*</span>
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Contoh: 0812345678"
-                      className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
-                      value={dealposPhone}
-                      onChange={(e) => setDealposPhone(e.target.value.replace(/[^\d+]/g, ''))}
-                    />
+                      Coba Sinkron Ulang
+                    </button>
                   </div>
                 </div>
-              </div>
-            </div>
-            
-            {connectionMode === "new" && dbjsVariantsCount > 1 && (
-              <div className="space-y-1 shrink-0 mt-1 sm:mt-0">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                  Jumlah Sepeda
-                </label>
-                <select 
-                  className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none cursor-pointer"
-                  value={bikesConfig.length}
-                  onChange={(e) => handleBikesCountChange(Number(e.target.value))}
+              )}
+
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={16}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cari nama pelanggan / nomor order..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 text-slate-900 border-2 border-slate-100 rounded-xl outline-none font-medium text-sm focus:border-slate-300 transition-all font-sans"
+                    value={dealposSearch}
+                    onChange={(e) => setDealposSearch(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setName("");
+                    setPhone("");
+                    setUnit("");
+                    setSelectedServices([]);
+                    setNotes("");
+                    setSelectedCustomer(null);
+                    setDealposStep("manual");
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider shrink-0 transition-colors"
                 >
-                  {Array.from({ length: dbjsVariantsCount }).map((_, idx) => (
-                    <option key={idx + 1} value={idx + 1}>
-                      {idx + 1} Sepeda
-                    </option>
-                  ))}
-                </select>
+                  Mode Manual
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* Connection Mode Selection Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
-            <button
-              type="button"
-              onClick={() => setConnectionMode("new")}
-              className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
-                connectionMode === "new"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Daftarkan Baru
-            </button>
-            <button
-              type="button"
-              onClick={() => setConnectionMode("connect")}
-              className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
-                connectionMode === "connect"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Hubungkan ke Antrian Manual
-            </button>
-          </div>
-
-          {connectionMode === "new" ? (
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1 pl-0.5">
-              {bikesConfig.map((bike, idx) => {
-                const orderDbjsServices = selectedDealposOrder.Variants.filter((v: any) => {
-                  const code = v.Code || "";
-                  const itemId = v.ItemID || "";
-                  return code.startsWith("DBJS") || itemId.startsWith("DBJS");
-                });
-
-                return (
-                  <div key={bike.id} className="p-4 rounded-xl border border-slate-200 bg-white space-y-4 shadow-sm relative">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                      <h5 className="font-black text-sm text-slate-800 uppercase tracking-wider">
-                        Spesifikasi Sepeda #{bike.id}
-                      </h5>
-                      <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded font-extrabold uppercase">
-                        Sepeda {idx + 1} dari {bikesConfig.length}
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
-                        Unit Sepeda (Wajib)
-                      </label>
-                      <input
-                        required={connectionMode === "new"}
-                        type="text"
-                        placeholder="Contoh: Brompton M6L / Moots Vamoots"
-                        className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-bold placeholder:text-slate-400 placeholder:font-normal"
-                        value={bike.unit}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setBikesConfig(prev => prev.map(b => b.id === bike.id ? { ...b, unit: val } : b));
-                        }}
-                      />
-                    </div>
-
-
-                    <div>
-                      <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
-                        Layanan Servis (Pilih satu/lebih)
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {orderDbjsServices.map((v: any, index: number) => {
-                          const isChecked = bike.servicesSelected.includes(v.Name);
-                          return (
-                            <button
-                              type="button"
-                              key={index}
-                              onClick={() => toggleServiceForBike(bike.id, v.Name)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all select-none flex items-center gap-1.5 ${
-                                isChecked
-                                  ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
-                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                              }`}
-                            >
-                              {isChecked && <Check size={12} strokeWidth={3} />}
-                              {v.Name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
-                        Catatan Keluhan / Instruksi Khusus
-                      </label>
-                      <textarea
-                        placeholder="Masukkan keluhan khusus, cacat fisik awal, atau spesifikasi pengerjaan..."
-                        className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-medium h-16 resize-none placeholder:text-slate-400"
-                        value={bike.notes}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setBikesConfig(prev => prev.map(b => b.id === bike.id ? { ...b, notes: val } : b));
-                        }}
-                      />
-                    </div>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
+                <h5 className="text-[10px] uppercase tracking-widest text-slate-400 font-extrabold pb-1">
+                  Daftar Pesanan DEALPOS yang dapat Diimpor (
+                  {filteredDealposOrders.length})
+                </h5>
+                {isLoadingDealpos ? (
+                  <div className="flex items-center justify-center py-12 gap-2 text-slate-500 text-sm font-bold">
+                    <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                    Menyinkronkan...
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1 pl-0.5">
-              {activeManualTickets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 bg-white border border-slate-200 rounded-xl p-6">
-                  <AlertCircle size={36} className="text-amber-500 mb-2" />
-                  <p className="text-xs font-bold leading-relaxed">
-                    Tidak ada Kartu Antrian berlabel "Manual Card" yang aktif saat ini di cabang ini.
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-1 max-w-sm">
-                    Buat kartu antrian manual terlebih dahulu agar bisa dihubungkan ke pesanan DEALPOS di sini.
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4 shadow-sm">
-                  <div className="border-b border-slate-100 pb-2">
-                    <h5 className="font-black text-sm text-slate-800 uppercase tracking-wider">
-                      Pilih Antrian Manual
-                    </h5>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Pilih antrian mana yang ingin dihubungkan dengan pesanan DEALPOS ini
+                ) : filteredDealposOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
+                    <UserCog
+                      size={36}
+                      className="text-slate-300 mb-2 animate-pulse"
+                    />
+                    <p className="text-xs font-bold leading-relaxed px-4">
+                      Tidak ada pesanan parkir DEALPOS aktif dengan kode servis
+                      DBJS yang belum diimpor.
                     </p>
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-black text-slate-700 uppercase tracking-wider">
-                      Kartu Antrian Manual Aktif ({activeManualTickets.length})
-                    </label>
-                    <select
-                      required={connectionMode === "connect"}
-                      className="w-full text-xs font-bold text-slate-800 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-slate-300 transition-all cursor-pointer"
-                      value={selectedManualTicketId}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedManualTicketId(val);
-                        if (val) {
-                          const t = activeManualTickets.find((ticket: any) => ticket.id === val);
-                          if (t) {
-                            setDealposCustomerName(t.customerName || selectedDealposOrder?.Customer || "Unknown");
-                            setDealposPhone(t.phone || selectedDealposOrder?.Phone || "");
-                          }
-                        }
-                      }}
-                    >
-                      <option value="">-- Hubungkan ke Kartu Antrian Manual --</option>
-                      {activeManualTickets.map((t: any) => {
-                        const displayId = t.ticketNumber ? `#${t.ticketNumber}` : `#${t.id.slice(-4)}`;
+                ) : (
+                  <div className="space-y-2 pt-2">
+                    {filteredDealposOrders.map((order) => {
+                      const dbjsList = order.Variants.filter((v: any) => {
+                        const code = v.Code || "";
+                        const itemId = v.ItemID || "";
                         return (
-                          <option key={t.id} value={t.id}>
-                            {displayId} - {t.customerName} | {t.unitSepeda} ({t.serviceTypes.join(", ")})
-                          </option>
+                          code.startsWith("DBJS") || itemId.startsWith("DBJS")
                         );
-                      })}
-                    </select>
-                  </div>
+                      });
 
-                  {selectedManualTicketId && (
-                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                      return (
+                        <div
+                          key={order.OrderID}
+                          className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-300 cursor-pointer transition-all flex flex-col sm:flex-row justify-between sm:items-center gap-3 hover:shadow-sm"
+                          onClick={() => handleSelectOrder(order)}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full tracking-wider uppercase">
+                                #{order.Number}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono">
+                                {order.Created
+                                  ? new Date(order.Created).toLocaleDateString(
+                                      "id-ID",
+                                      { hour: "2-digit", minute: "2-digit" },
+                                    )
+                                  : ""}
+                              </span>
+                            </div>
+                            <h4 className="font-extrabold text-slate-800 text-sm uppercase">
+                              {order.Customer || "Unknown"}
+                            </h4>
+                            {order.ParkLabel && (
+                              <p className="text-xs text-slate-500 font-bold">
+                                Label: {order.ParkLabel}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {dbjsList.map((v: any, idx: number) => {
+                                const qty = Number(
+                                  v.Quantity ||
+                                    v.quantity ||
+                                    v.Qty ||
+                                    v.qty ||
+                                    1,
+                                );
+                                const qtyDisplay = qty > 1 ? ` (x${qty})` : "";
+                                return (
+                                  <span
+                                    key={idx}
+                                    className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold"
+                                  >
+                                    {v.Name}
+                                    {qtyDisplay}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 self-end sm:self-center">
+                            {confirmIgnoreOrderId === order.OrderID ? (
+                              <div className="bg-red-50 border border-red-200 p-2 rounded-xl flex items-center gap-2">
+                                <span className="text-[10px] font-extrabold text-red-700 uppercase tracking-tight">
+                                  Yakin sembunyikan order ini?
+                                </span>
+                                <button
+                                  type="button"
+                                  className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onIgnoreDealposId) {
+                                      onIgnoreDealposId(order.OrderID);
+                                    }
+                                    setDealposOrders((prev) =>
+                                      prev.filter(
+                                        (o) => o.OrderID !== order.OrderID,
+                                      ),
+                                    );
+                                    setConfirmIgnoreOrderId(null);
+                                  }}
+                                >
+                                  Ya
+                                </button>
+                                <button
+                                  type="button"
+                                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg tracking-wider transition-all"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmIgnoreOrderId(null);
+                                  }}
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-black uppercase px-3 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmIgnoreOrderId(order.OrderID);
+                                  }}
+                                >
+                                  Bukan Service
+                                </button>
+                                <button
+                                  className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-4 py-2 rounded-lg tracking-wider active:scale-95 transition-all text-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectOrder(order);
+                                  }}
+                                >
+                                  Pilih
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {dealposStep === "configure-booking" && selectedDealposOrder && (
+            <form
+              onSubmit={handleConfirmDealposBooking}
+              className="space-y-4 overflow-hidden max-h-[80vh] flex flex-col"
+            >
+              <div className="bg-slate-50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 shrink-0">
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
+                      Info Pelanggan & Pesanan
+                    </p>
+                    <p className="text-xs text-slate-500 font-bold mb-2 cursor-default">
+                      #{selectedDealposOrder.Number} -{" "}
+                      {selectedDealposOrder.ParkLabel}
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
-                          Nama Pelanggan (Ubah Jika Diperlukan)
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
-                          placeholder="Masukkan nama pelanggan..."
-                          value={dealposCustomerName}
-                          onChange={(e) => setDealposCustomerName(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
-                          Nomor Telepon (Wajib) <span className="text-red-500 font-black">*</span>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                          Nama Pelanggan
                         </label>
                         <input
                           required
                           type="text"
-                          className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
-                          placeholder="Masukkan nomor telepon..."
-                          value={dealposPhone}
-                          onChange={(e) => setDealposPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                          className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                          value={dealposCustomerName}
+                          onChange={(e) =>
+                            setDealposCustomerName(e.target.value)
+                          }
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+                          Nomor Telepon{" "}
+                          <span className="text-red-500 font-black">*</span>
+                        </label>
+                        <input
+                          required
+                          type="text"
+                          placeholder="Contoh: 0812345678"
+                          className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal"
+                          value={dealposPhone}
+                          onChange={(e) =>
+                            setDealposPhone(
+                              e.target.value.replace(/[^\d+]/g, ""),
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {connectionMode === "new" && dbjsVariantsCount > 1 && (
+                  <div className="space-y-1 shrink-0 mt-1 sm:mt-0">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                      Jumlah Sepeda
+                    </label>
+                    <select
+                      className="w-full text-xs font-bold text-slate-800 p-2 bg-white border border-slate-200 rounded-lg outline-none cursor-pointer"
+                      value={bikesConfig.length}
+                      onChange={(e) =>
+                        handleBikesCountChange(Number(e.target.value))
+                      }
+                    >
+                      {Array.from({ length: dbjsVariantsCount }).map(
+                        (_, idx) => (
+                          <option key={idx + 1} value={idx + 1}>
+                            {idx + 1} Sepeda
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Connection Mode Selection Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode("new")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                    connectionMode === "new"
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Daftarkan Baru
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode("connect")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                    connectionMode === "connect"
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Hubungkan ke Antrian Manual
+                </button>
+              </div>
+
+              {connectionMode === "new" ? (
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 pl-0.5">
+                  {bikesConfig.map((bike, idx) => {
+                    const orderDbjsServices =
+                      selectedDealposOrder.Variants.filter((v: any) => {
+                        const code = v.Code || "";
+                        const itemId = v.ItemID || "";
+                        return (
+                          code.startsWith("DBJS") || itemId.startsWith("DBJS")
+                        );
+                      });
+
+                    return (
+                      <div
+                        key={bike.id}
+                        className="p-4 rounded-xl border border-slate-200 bg-white space-y-4 shadow-sm relative"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <h5 className="font-black text-sm text-slate-800 uppercase tracking-wider">
+                            Spesifikasi Sepeda #{bike.id}
+                          </h5>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded font-extrabold uppercase">
+                            Sepeda {idx + 1} dari {bikesConfig.length}
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
+                            Unit Sepeda (Wajib)
+                          </label>
+                          <input
+                            required={connectionMode === "new"}
+                            type="text"
+                            placeholder="Contoh: Brompton M6L / Moots Vamoots"
+                            className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-bold placeholder:text-slate-400 placeholder:font-normal"
+                            value={bike.unit}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBikesConfig((prev) =>
+                                prev.map((b) =>
+                                  b.id === bike.id ? { ...b, unit: val } : b,
+                                ),
+                              );
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
+                            Layanan Servis (Pilih satu/lebih)
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {orderDbjsServices.map((v: any, index: number) => {
+                              const isChecked = bike.servicesSelected.includes(
+                                v.Name,
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  key={index}
+                                  onClick={() =>
+                                    toggleServiceForBike(bike.id, v.Name)
+                                  }
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all select-none flex items-center gap-1.5 ${
+                                    isChecked
+                                      ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                  }`}
+                                >
+                                  {isChecked && (
+                                    <Check size={12} strokeWidth={3} />
+                                  )}
+                                  {v.Name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black text-slate-700 mb-1.5 uppercase tracking-wider">
+                            Catatan Keluhan / Instruksi Khusus
+                          </label>
+                          <textarea
+                            placeholder="Masukkan keluhan khusus, cacat fisik awal, atau spesifikasi pengerjaan..."
+                            className="w-full p-2.5 text-xs bg-white text-slate-900 border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none font-medium h-16 resize-none placeholder:text-slate-400"
+                            value={bike.notes}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBikesConfig((prev) =>
+                                prev.map((b) =>
+                                  b.id === bike.id ? { ...b, notes: val } : b,
+                                ),
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 pl-0.5">
+                  {activeManualTickets.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 bg-white border border-slate-200 rounded-xl p-6">
+                      <AlertCircle size={36} className="text-amber-500 mb-2" />
+                      <p className="text-xs font-bold leading-relaxed">
+                        Tidak ada Kartu Antrian berlabel "Manual Card" yang
+                        aktif saat ini di cabang ini.
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-1 max-w-sm">
+                        Buat kartu antrian manual terlebih dahulu agar bisa
+                        dihubungkan ke pesanan DEALPOS di sini.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4 shadow-sm">
+                      <div className="border-b border-slate-100 pb-2">
+                        <h5 className="font-black text-sm text-slate-800 uppercase tracking-wider">
+                          Pilih Antrian Manual
+                        </h5>
+                        <p className="text-xs text-slate-500 font-medium">
+                          Pilih antrian mana yang ingin dihubungkan dengan
+                          pesanan DEALPOS ini
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-xs font-black text-slate-700 uppercase tracking-wider">
+                          Kartu Antrian Manual Aktif (
+                          {activeManualTickets.length})
+                        </label>
+                        <select
+                          required={connectionMode === "connect"}
+                          className="w-full text-xs font-bold text-slate-800 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-slate-300 transition-all cursor-pointer"
+                          value={selectedManualTicketId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedManualTicketId(val);
+                            if (val) {
+                              const t = activeManualTickets.find(
+                                (ticket: any) => ticket.id === val,
+                              );
+                              if (t) {
+                                setDealposCustomerName(
+                                  t.customerName ||
+                                    selectedDealposOrder?.Customer ||
+                                    "Unknown",
+                                );
+                                setDealposPhone(
+                                  t.phone || selectedDealposOrder?.Phone || "",
+                                );
+                              }
+                            }
+                          }}
+                        >
+                          <option value="">
+                            -- Hubungkan ke Kartu Antrian Manual --
+                          </option>
+                          {activeManualTickets.map((t: any) => {
+                            const displayId = t.ticketNumber
+                              ? `#${t.ticketNumber}`
+                              : `#${t.id.slice(-4)}`;
+                            return (
+                              <option key={t.id} value={t.id}>
+                                {displayId} - {t.customerName} | {t.unitSepeda}{" "}
+                                ({t.serviceTypes.join(", ")})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {selectedManualTicketId && (
+                        <div className="space-y-3 pt-3 border-t border-slate-100">
+                          <div>
+                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                              Nama Pelanggan (Ubah Jika Diperlukan)
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Masukkan nama pelanggan..."
+                              value={dealposCustomerName}
+                              onChange={(e) =>
+                                setDealposCustomerName(e.target.value)
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                              Nomor Telepon (Wajib){" "}
+                              <span className="text-red-500 font-black">*</span>
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              className="w-full text-xs font-bold text-slate-800 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Masukkan nomor telepon..."
+                              value={dealposPhone}
+                              onChange={(e) =>
+                                setDealposPhone(
+                                  e.target.value.replace(/[^\d+]/g, ""),
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
-            </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDealposStep("select-order")}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest hover:underline"
+                >
+                  Kembali
+                </button>
+                {connectionMode === "connect" ? (
+                  <button
+                    type="submit"
+                    disabled={
+                      activeManualTickets.length === 0 ||
+                      !selectedManualTicketId ||
+                      !dealposPhone.trim()
+                    }
+                    className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
+                  >
+                    Hubungkan Pesanan DEALPOS
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={
+                      !dealposPhone.trim() ||
+                      bikesConfig.some(
+                        (b) =>
+                          !b.unit.trim() || b.servicesSelected.length === 0,
+                      )
+                    }
+                    className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
+                  >
+                    Simpan & Daftarkan #{bikesConfig.length} Antrian
+                  </button>
+                )}
+              </div>
+            </form>
           )}
 
-          <div className="flex justify-between items-center pt-2 border-t border-slate-100 shrink-0">
-            <button
-              type="button"
-              onClick={() => setDealposStep("select-order")}
-              className="text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest hover:underline"
+          {dealposStep === "manual" && (
+            <form
+              onSubmit={handleManualSubmit}
+              className="space-y-4 max-h-[80vh] overflow-y-auto pr-1"
             >
-              Kembali
-            </button>
-            {connectionMode === "connect" ? (
-              <button
-                type="submit"
-                disabled={activeManualTickets.length === 0 || !selectedManualTicketId || !dealposPhone.trim()}
-                className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
-              >
-                Hubungkan Pesanan DEALPOS
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!dealposPhone.trim() || bikesConfig.some(b => !b.unit.trim() || b.servicesSelected.length === 0)}
-                className="bg-slate-900 hover:bg-black text-white text-xs font-black uppercase px-6 py-3 rounded-lg tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
-              >
-                Simpan & Daftarkan #{bikesConfig.length} Antrian
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-
-      {dealposStep === "manual" && (
-        <form onSubmit={handleManualSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-          <CustomerSearchInput
-            customers={customers}
-            onSelect={handleSelectCustomer}
-            onClear={() => setSelectedCustomer(null)}
-          />
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink-0 mx-4 text-xs font-bold text-slate-400 uppercase">
-              Detail Tiket
-            </span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-              Nama Pelanggan
-            </label>
-            <input
-              required
-              type="text"
-              className={inputClass}
-              placeholder="Contoh: Budi Prasetyo"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-                Nomor Telepon <span className="text-red-500 font-black">*</span>
-              </label>
-              <input
-                required
-                type="text"
-                className={inputClass}
-                placeholder="08xxxx"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
+              <CustomerSearchInput
+                customers={customers}
+                onSelect={handleSelectCustomer}
+                onClear={() => setSelectedCustomer(null)}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-                Unit Sepeda
-              </label>
-              {selectedCustomer &&
-              selectedCustomer.bikes &&
-              selectedCustomer.bikes.length > 0 ? (
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="bike-options"
-                    className={inputClass}
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="Pilih atau ketik baru..."
-                  />
-                  <datalist id="bike-options">
-                    {selectedCustomer.bikes.map((b) => (
-                      <option key={b} value={b} />
-                    ))}
-                  </datalist>
-                </div>
-              ) : (
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink-0 mx-4 text-xs font-bold text-slate-400 uppercase">
+                  Detail Tiket
+                </span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
+                  Nama Pelanggan
+                </label>
                 <input
                   required
                   type="text"
                   className={inputClass}
-                  placeholder="Contoh: Brompton M6L"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
+                  placeholder="Contoh: Budi Prasetyo"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-              Pilih Layanan
-            </label>
-            <MultiSearchableSelect
-              options={serviceNames}
-              selectedValues={selectedServices}
-              onChange={setSelectedServices}
-              placeholder="Pilih satu atau lebih layanan..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
-              Catatan Keluhan
-            </label>
-            <textarea
-              className={inputClass}
-              rows={2}
-              placeholder="Sebutkan detail kerusakan jika ada..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setDealposStep("select-order");
-                fetchDealposOrders();
-              }}
-              className="text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest hover:underline"
-            >
-              Gunakan DEALPOS
-            </button>
-            <button
-              type="submit"
-              disabled={!name || selectedServices.length === 0 || !unit}
-              className="bg-slate-900 hover:bg-black text-white text-xs font-extrabold uppercase px-6 py-3.5 rounded-xl tracking-wider shadow transition-all disabled:opacity-35 disabled:cursor-not-allowed"
-            >
-              Buat Tiket Antrian
-            </button>
-          </div>
-        </form>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
+                    Nomor Telepon{" "}
+                    <span className="text-red-500 font-black">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    className={inputClass}
+                    placeholder="08xxxx"
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value.replace(/[^\d+]/g, ""))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
+                    Unit Sepeda
+                  </label>
+                  {selectedCustomer &&
+                  selectedCustomer.bikes &&
+                  selectedCustomer.bikes.length > 0 ? (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        list="bike-options"
+                        className={inputClass}
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                        placeholder="Pilih atau ketik baru..."
+                      />
+                      <datalist id="bike-options">
+                        {selectedCustomer.bikes.map((b) => (
+                          <option key={b} value={b} />
+                        ))}
+                      </datalist>
+                    </div>
+                  ) : (
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      placeholder="Contoh: Brompton M6L"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
+                  Pilih Layanan
+                </label>
+                <MultiSearchableSelect
+                  options={serviceNames}
+                  selectedValues={selectedServices}
+                  onChange={setSelectedServices}
+                  placeholder="Pilih satu atau lebih layanan..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase">
+                  Catatan Keluhan
+                </label>
+                <textarea
+                  className={inputClass}
+                  rows={2}
+                  placeholder="Sebutkan detail kerusakan jika ada..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDealposStep("select-order");
+                    fetchDealposOrders();
+                  }}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-widest hover:underline"
+                >
+                  Gunakan DEALPOS
+                </button>
+                <button
+                  type="submit"
+                  disabled={!name || selectedServices.length === 0 || !unit}
+                  className="bg-slate-900 hover:bg-black text-white text-xs font-extrabold uppercase px-6 py-3.5 rounded-xl tracking-wider shadow transition-all disabled:opacity-35 disabled:cursor-not-allowed"
+                >
+                  Buat Tiket Antrian
+                </button>
+              </div>
+            </form>
+          )}
+        </>
       )}
-      </>)}
     </ModalBase>
   );
 };
@@ -1681,19 +1939,28 @@ export const EditServicesModal = ({
         </div>
         {ticket?.dealposOrderId ? (
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest font-mono">Status Reconsiled:</span>
+            <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest font-mono">
+              Status Reconsiled:
+            </span>
             <span className="text-xs font-black bg-blue-100 text-blue-800 px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-              🔗 DealPOS {(() => {
+              🔗 DealPOS{" "}
+              {(() => {
                 const num = ticket.dealposOrderNumber;
                 const id = ticket.dealposOrderId;
                 if (num && String(num).trim()) {
                   const val = String(num).trim();
-                  const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                  const isGuid =
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                      val,
+                    ) || val.length > 20;
                   if (!isGuid) return val.replace(/^#+/, "");
                 }
                 if (id && String(id).trim()) {
                   const val = String(id).trim();
-                  const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val) || val.length > 20;
+                  const isGuid =
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                      val,
+                    ) || val.length > 20;
                   if (!isGuid) return val.replace(/^#+/, "");
                 }
                 return "Terhubung";
@@ -1702,7 +1969,9 @@ export const EditServicesModal = ({
           </div>
         ) : (
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-amber-500 uppercase tracking-widest font-mono">Status Kartu:</span>
+            <span className="text-[10px] font-extrabold text-amber-500 uppercase tracking-widest font-mono">
+              Status Kartu:
+            </span>
             <span className="text-xs font-black bg-amber-100 text-amber-800 px-3 py-1 rounded-full uppercase tracking-wider">
               📝 Manual Card
             </span>
@@ -2056,7 +2325,7 @@ export const StorageCheckInModal = ({
               required
               type="text"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ""))}
               className={inputClass}
             />
           </div>
@@ -2357,7 +2626,7 @@ export const EditCustomerModal = ({
             required
             type="text"
             value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
+            onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ""))}
             className={inputClass}
           />
         </div>
@@ -2446,7 +2715,8 @@ export const StorageHistoryModal = ({
                 // Helper to extract photos from log in legacy or new format
                 let logPhotos: string[] = log.photos || [];
                 // Fallback to legacy single photo if necessary
-                if ((log as any).photo && logPhotos.length === 0) logPhotos = [(log as any).photo];
+                if ((log as any).photo && logPhotos.length === 0)
+                  logPhotos = [(log as any).photo];
 
                 return (
                   <div key={log.id} className="ml-6 relative">
@@ -2596,7 +2866,9 @@ export const StorageApprovalModal = ({
                 type="text"
                 className={inputClass}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                onChange={(e) =>
+                  setPhone(e.target.value.replace(/[^\d+]/g, ""))
+                }
               />
             </div>
             <div>
@@ -2768,7 +3040,13 @@ export const ConfirmationModal = ({
   );
 };
 
-export const KendalaModal = ({ isOpen, onClose, ticket, services, onConfirm }: any) => {
+export const KendalaModal = ({
+  isOpen,
+  onClose,
+  ticket,
+  services,
+  onConfirm,
+}: any) => {
   const [kendala, setKendala] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const serviceNames = useMemo(
@@ -2797,12 +3075,21 @@ export const KendalaModal = ({ isOpen, onClose, ticket, services, onConfirm }: a
   };
 
   return (
-    <ModalBase isOpen={isOpen} title={`Kendala: ${ticket?.customerName}`} onClose={onClose}>
+    <ModalBase
+      isOpen={isOpen}
+      title={`Kendala: ${ticket?.customerName}`}
+      onClose={onClose}
+    >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="bg-yellow-50 text-yellow-700 text-sm p-3 rounded border border-yellow-200">
-          <strong>Perhatian:</strong> Membuat tiket dari form ini akan membuat antrian baru bertanda <span className="font-bold uppercase tracking-wide bg-red-500 text-white px-1 rounded text-xs ml-1 mr-1">Garansi</span> di daftar "Menunggu". Tiket yang lama akan ditandai selesai.
+          <strong>Perhatian:</strong> Membuat tiket dari form ini akan membuat
+          antrian baru bertanda{" "}
+          <span className="font-bold uppercase tracking-wide bg-red-500 text-white px-1 rounded text-xs ml-1 mr-1">
+            Garansi
+          </span>{" "}
+          di daftar "Menunggu". Tiket yang lama akan ditandai selesai.
         </div>
-        
+
         <div>
           <label className="block text-sm font-black text-slate-700 uppercase tracking-widest mb-2">
             Pilih Layanan Garansi <span className="text-red-500">*</span>
@@ -2852,7 +3139,9 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedOutcome, setSelectedOutcome] = useState<'Selesai' | 'Kendala' | 'Tidak Respond' | 'Milik Internal'>("Selesai");
+  const [selectedOutcome, setSelectedOutcome] = useState<
+    "Selesai" | "Kendala" | "Tidak Respond" | "Milik Internal"
+  >("Selesai");
   const [wantsWarrantyClaim, setWantsWarrantyClaim] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2953,7 +3242,6 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
   return (
     <ModalBase isOpen={isOpen} title="Follow Up Manajemen" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-6">
-        
         {/* WhatsApp Redirection Button */}
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-2.5">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
@@ -2982,10 +3270,30 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
           </label>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { id: "Selesai", label: "Selesai", icon: "✅", desc: "Instruksi pengerjaan selesai" },
-              { id: "Kendala", label: "Kendala", icon: "⚠️", desc: "Terdapat kendala pengerjaan" },
-              { id: "Tidak Respond", label: "Tidak Respond", icon: "⏳", desc: "Pelanggan tidak merespon" },
-              { id: "Milik Internal", label: "Milik Internal", icon: "🏢", desc: "Sepeda milik tim/toko" },
+              {
+                id: "Selesai",
+                label: "Selesai",
+                icon: "✅",
+                desc: "Instruksi pengerjaan selesai",
+              },
+              {
+                id: "Kendala",
+                label: "Kendala",
+                icon: "⚠️",
+                desc: "Terdapat kendala pengerjaan",
+              },
+              {
+                id: "Tidak Respond",
+                label: "Tidak Respond",
+                icon: "⏳",
+                desc: "Pelanggan tidak merespon",
+              },
+              {
+                id: "Milik Internal",
+                label: "Milik Internal",
+                icon: "🏢",
+                desc: "Sepeda milik tim/toko",
+              },
             ].map((opt) => {
               const isSelected = selectedOutcome === opt.id;
               return (
@@ -3003,7 +3311,9 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
                     <span>{opt.icon}</span>
                     <span>{opt.label}</span>
                   </div>
-                  <span className={`text-[10px] font-medium leading-tight ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                  <span
+                    className={`text-[10px] font-medium leading-tight ${isSelected ? "text-slate-300" : "text-slate-500"}`}
+                  >
                     {opt.desc}
                   </span>
                 </button>
@@ -3052,9 +3362,13 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
         {selectedOutcome !== "Milik Internal" ? (
           <div className="space-y-3">
             <div className="bg-purple-50 text-purple-800 text-xs p-3.5 rounded-xl border border-purple-200/50 flex items-start gap-2.5">
-              <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-purple-600" />
+              <AlertCircle
+                size={16}
+                className="mt-0.5 flex-shrink-0 text-purple-600"
+              />
               <p className="font-semibold leading-relaxed">
-                Wajib melampirkan <strong>Screenshot chat WhatsApp</strong> sebagai bukti hasil follow up ({selectedOutcome}).
+                Wajib melampirkan <strong>Screenshot chat WhatsApp</strong>{" "}
+                sebagai bukti hasil follow up ({selectedOutcome}).
               </p>
             </div>
 
@@ -3064,7 +3378,9 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
               onPaste={onPaste}
               onClick={() => fileInputRef.current?.click()}
               className={`relative group border-2 border-dashed rounded-2xl p-6 transition-all flex flex-col items-center justify-center cursor-pointer min-h-[160px] ${
-                preview ? 'border-purple-500 bg-purple-50/30' : 'border-slate-200 hover:border-purple-400 hover:bg-slate-50/50'
+                preview
+                  ? "border-purple-500 bg-purple-50/30"
+                  : "border-slate-200 hover:border-purple-400 hover:bg-slate-50/50"
               }`}
             >
               <input
@@ -3077,7 +3393,11 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
 
               {preview ? (
                 <div className="relative w-full aspect-video max-h-[180px] rounded-xl overflow-hidden shadow-sm">
-                  <img src={preview} alt="Preview Screenshot" className="w-full h-full object-contain bg-black/5" />
+                  <img
+                    src={preview}
+                    alt="Preview Screenshot"
+                    className="w-full h-full object-contain bg-black/5"
+                  />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <p className="text-white font-black text-xs flex items-center gap-2 uppercase tracking-wider">
                       <UploadCloud size={16} /> Klik/Drag untuk ganti
@@ -3094,7 +3414,8 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
                       Upload Screenshot Chat WA
                     </p>
                     <p className="text-slate-500 text-[10px] font-medium leading-relaxed">
-                      Klik, Drag & Drop, atau <strong>Paste (Ctrl+V)</strong> di sini
+                      Klik, Drag & Drop, atau <strong>Paste (Ctrl+V)</strong> di
+                      sini
                     </p>
                   </div>
                 </>
@@ -3105,7 +3426,9 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
           <div className="bg-blue-50 text-blue-800 text-xs p-4 rounded-xl border border-blue-200/50 flex items-start gap-2.5">
             <span className="text-base">🏢</span>
             <p className="font-semibold leading-relaxed">
-              Hasil <strong>Milik Internal</strong> teridentifikasi sebagai keperluan operasional tim/toko sendiri, sehingga <strong>tidak membutuhkan bukti screenshot</strong>.
+              Hasil <strong>Milik Internal</strong> teridentifikasi sebagai
+              keperluan operasional tim/toko sendiri, sehingga{" "}
+              <strong>tidak membutuhkan bukti screenshot</strong>.
             </p>
           </div>
         )}
@@ -3140,4 +3463,3 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
     </ModalBase>
   );
 };
-
