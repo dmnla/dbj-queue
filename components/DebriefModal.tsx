@@ -742,11 +742,23 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     ).length;
 
     const countFollowUp = branchSpec.filter((t) => {
-      if (t.status !== "taken" || !t.timestamps.taken) return false;
-      if (isTicketExcludedFromFollowUp(t)) return false;
-      const takenTime = new Date(t.timestamps.taken).getTime();
-      const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
-      return daysSinceTaken >= 8;
+      if (t.status === "done") {
+        const isFinishedToday = isToday(t.timestamps?.finished);
+        const isLate = t.flags?.some(
+          (f2) =>
+            (f2 as any) === "TELAT_FOLLOW_UP" ||
+            (f2 as any) === "LATE_FOLLOW_UP",
+        );
+        return isFinishedToday && isLate;
+      }
+      if (t.status === "taken") {
+        if (!t.timestamps?.taken) return false;
+        if (isTicketExcludedFromFollowUp(t)) return false;
+        const takenTime = new Date(t.timestamps.taken).getTime();
+        const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
+        return isToday(eightDaysLater.toISOString());
+      }
+      return false;
     }).length;
 
     const monthlyFollowUp = branchSpec.filter((t) => {
@@ -761,11 +773,12 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
         );
         return isFinishedThisMonth && isLate;
       } else if (t.status === "taken") {
-        if (!t.timestamps.taken) return false;
+        if (!t.timestamps?.taken) return false;
         if (isTicketExcludedFromFollowUp(t)) return false;
         const takenTime = new Date(t.timestamps.taken).getTime();
+        const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
         const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
-        return daysSinceTaken >= 8;
+        return isWithinMonthlyCutoff(eightDaysLater.toISOString()) && daysSinceTaken >= 8;
       }
       return false;
     }).length;
