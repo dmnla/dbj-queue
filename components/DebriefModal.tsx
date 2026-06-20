@@ -742,45 +742,53 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     ).length;
 
     const countFollowUp = branchSpec.filter((t) => {
+      if (!t.timestamps?.taken) return false;
+      if (isTicketExcludedFromFollowUp(t)) return false;
+
+      const takenTime = new Date(t.timestamps.taken).getTime();
+      const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
+
+      // Verify it is actually late
       if (t.status === "done") {
-        const isFinishedToday = isToday(t.timestamps?.finished);
         const isLate = t.flags?.some(
-          (f2) =>
-            (f2 as any) === "TELAT_FOLLOW_UP" ||
-            (f2 as any) === "LATE_FOLLOW_UP",
+          (f2) => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP"
         );
-        return isFinishedToday && isLate;
+        if (!isLate) return false;
+      } else if (t.status === "taken") {
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        if (eightDaysLater.getTime() > todayEnd.getTime()) return false;
+      } else {
+        return false;
       }
-      if (t.status === "taken") {
-        if (!t.timestamps?.taken) return false;
-        if (isTicketExcludedFromFollowUp(t)) return false;
-        const takenTime = new Date(t.timestamps.taken).getTime();
-        const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
-        return isToday(eightDaysLater.toISOString());
-      }
-      return false;
+
+      // The violation is counted on the exact calendar day it became late (8th day)
+      return isToday(eightDaysLater.toISOString());
     }).length;
 
     const monthlyFollowUp = branchSpec.filter((t) => {
+      if (!t.timestamps?.taken) return false;
+      if (isTicketExcludedFromFollowUp(t)) return false;
+
+      const takenTime = new Date(t.timestamps.taken).getTime();
+      const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
+
+      // Verify it is actually late
       if (t.status === "done") {
-        const isFinishedThisMonth =
-          t.timestamps?.finished &&
-          isWithinMonthlyCutoff(t.timestamps.finished);
         const isLate = t.flags?.some(
-          (f2) =>
-            (f2 as any) === "TELAT_FOLLOW_UP" ||
-            (f2 as any) === "LATE_FOLLOW_UP",
+          (f2) => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP"
         );
-        return isFinishedThisMonth && isLate;
+        if (!isLate) return false;
       } else if (t.status === "taken") {
-        if (!t.timestamps?.taken) return false;
-        if (isTicketExcludedFromFollowUp(t)) return false;
-        const takenTime = new Date(t.timestamps.taken).getTime();
-        const eightDaysLater = new Date(takenTime + 8 * 24 * 60 * 60 * 1000);
-        const daysSinceTaken = (Date.now() - takenTime) / (1000 * 3600 * 24);
-        return isWithinMonthlyCutoff(eightDaysLater.toISOString()) && daysSinceTaken >= 8;
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        if (eightDaysLater.getTime() > todayEnd.getTime()) return false;
+      } else {
+        return false;
       }
-      return false;
+
+      // The violation is counted in the cycle containing its 8th calendar day
+      return isWithinMonthlyCutoff(eightDaysLater.toISOString());
     }).length;
 
     // Active
