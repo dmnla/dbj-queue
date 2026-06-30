@@ -62,8 +62,16 @@ export const Performance: React.FC<PerformanceProps> = ({
   const monthlyPeriods = useMemo(() => {
     const result: Period[] = [];
     const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth(); // 0-indexed
+    let latestMonth = today.getMonth(); // 0-indexed
+    let latestYear = today.getFullYear();
+
+    if (today.getDate() >= 29) {
+      latestMonth += 1;
+      if (latestMonth > 11) {
+        latestMonth = 0;
+        latestYear += 1;
+      }
+    }
 
     const monthNames = [
       "Januari",
@@ -81,8 +89,8 @@ export const Performance: React.FC<PerformanceProps> = ({
     ];
 
     for (let i = 0; i < 12; i++) {
-      let m = currentMonth - i;
-      let y = currentYear;
+      let m = latestMonth - i;
+      let y = latestYear;
       while (m < 0) {
         m += 12;
         y -= 1;
@@ -111,10 +119,14 @@ export const Performance: React.FC<PerformanceProps> = ({
   const yearlyPeriods = useMemo(() => {
     const result: Period[] = [];
     const today = new Date();
-    const currentYear = today.getFullYear();
+    let latestYear = today.getFullYear();
+
+    if (today.getMonth() === 11 && today.getDate() >= 29) {
+      latestYear += 1;
+    }
 
     for (let i = 0; i < 3; i++) {
-      const y = currentYear - i;
+      const y = latestYear - i;
       const endDate = new Date(y, 11, 28, 23, 59, 59, 999);
       const startDate = new Date(y - 1, 11, 29, 0, 0, 0, 0);
 
