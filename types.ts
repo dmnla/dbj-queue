@@ -66,6 +66,8 @@ export interface Ticket {
   flags?: flag_type[];
   flag_types?: flag_type[];
   overtimeMechanic?: string | null;
+  activeTimer?: string; // Format: "DD:HH:MM:SS"
+  pauseTimer?: string;  // Format: "DD:HH:MM:SS"
 }
 
 export interface KpiData {

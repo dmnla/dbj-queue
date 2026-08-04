@@ -247,7 +247,15 @@ export const subscribeToTickets = (onUpdate: (tickets: Ticket[]) => void) => {
         if (followUpResult === "Berhasil") {
           followUpResult = "Selesai";
         }
-        return { id: doc.id, ...data, followUpResult } as Ticket;
+        const activeTimer = data.activeTimer || (data.activeTimerSeconds ? formatTimerDDHHMMSS(data.activeTimerSeconds) : "00:00:00:00");
+        const pauseTimer = data.pauseTimer || (data.pauseTimerSeconds ? formatTimerDDHHMMSS(data.pauseTimerSeconds) : "00:00:00:00");
+        return {
+          id: doc.id,
+          ...data,
+          followUpResult,
+          activeTimer,
+          pauseTimer,
+        } as Ticket;
       });
       tickets.sort(
         (a, b) =>
@@ -473,6 +481,8 @@ export const addTicketToCloud = async (
         notes: notes || null,
         ticketNumber: nextNum.toString(),
         lastStatusChange: timestamp,
+        activeTimer: "00:00:00:00",
+        pauseTimer: "00:00:00:00",
         timestamps: {
           arrival: timestamp,
           called: null,
@@ -576,9 +586,43 @@ export const updateTicketStatusInCloud = async (
   }
 
   const updates: any = { status: finalStatus };
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowMs = now.getTime();
+
+  let activeSec = parseDDHHMMSSToSeconds(currentTicket.activeTimer);
+  let pauseSec = parseDDHHMMSSToSeconds(currentTicket.pauseTimer);
+
   if (finalStatus !== currentTicket.status) {
-    updates.lastStatusChange = new Date().toISOString();
+    const prevStatus = currentTicket.status;
+    let lastChangeMs = currentTicket.lastStatusChange
+      ? new Date(currentTicket.lastStatusChange).getTime()
+      : null;
+
+    if (!lastChangeMs || isNaN(lastChangeMs)) {
+      if (prevStatus === "active" && currentTicket.timestamps?.called) {
+        lastChangeMs = new Date(currentTicket.timestamps.called).getTime();
+      } else if ((prevStatus === "pending" || prevStatus === "waiting") && currentTicket.timestamps?.arrival) {
+        lastChangeMs = new Date(currentTicket.timestamps.arrival).getTime();
+      }
+    }
+
+    if (lastChangeMs && !isNaN(lastChangeMs) && nowMs > lastChangeMs) {
+      const elapsedSeconds = Math.floor((nowMs - lastChangeMs) / 1000);
+      if (elapsedSeconds > 0) {
+        if (prevStatus === "active") {
+          activeSec += elapsedSeconds;
+        } else if (prevStatus === "pending") {
+          pauseSec += elapsedSeconds;
+        }
+      }
+    }
+
+    updates.lastStatusChange = nowIso;
   }
+
+  updates.activeTimer = formatTimerDDHHMMSS(activeSec);
+  updates.pauseTimer = formatTimerDDHHMMSS(pauseSec);
   let updatedFlags = [...(currentTicket.flags || [])];
   let flagsChanged = false;
 
@@ -586,15 +630,12 @@ export const updateTicketStatusInCloud = async (
     updates["timestamps.called"] = new Date().toISOString();
   if (finalStatus === "ready") {
     updates["timestamps.ready"] = new Date().toISOString();
-    if (currentTicket.status === "active" && currentTicket.timestamps.called) {
-      const startMs = new Date(currentTicket.timestamps.called).getTime();
-      const diffMs = new Date().getTime() - startMs;
-      if (diffMs < 5 * 60 * 1000) {
-        // Less than 5 minutes
-        if (!updatedFlags.includes("ANOMALI_DURASI_SERVICE" as any)) {
-          updatedFlags.push("ANOMALI_DURASI_SERVICE" as any);
-          flagsChanged = true;
-        }
+    const netSec = Math.max(0, activeSec - pauseSec);
+    if (netSec < 300) {
+      // Less than 5 minutes work duration
+      if (!updatedFlags.includes("ANOMALI_DURASI_SERVICE" as any)) {
+        updatedFlags.push("ANOMALI_DURASI_SERVICE" as any);
+        flagsChanged = true;
       }
     }
   }
@@ -1396,4 +1437,125 @@ export const subscribeToOperationalStatus = (
     (error) => console.error("Operational status subscription error:", error)
   );
 };
+
+export const parseDDHHMMSSToSeconds = (timerStr?: string | null): number => {
+  if (!timerStr || typeof timerStr !== "string") return 0;
+  const parts = timerStr.split(":").map((p) => parseInt(p, 10));
+  if (parts.some((p) => isNaN(p))) return 0;
+
+  if (parts.length === 4) {
+    const [d, h, m, s] = parts;
+    return d * 86400 + h * 3600 + m * 60 + s;
+  } else if (parts.length === 3) {
+    const [h, m, s] = parts;
+    return h * 3600 + m * 60 + s;
+  } else if (parts.length === 2) {
+    const [m, s] = parts;
+    return m * 60 + s;
+  }
+  return 0;
+};
+
+export const formatTimerDDHHMMSS = (totalSeconds: number): string => {
+  if (!totalSeconds || isNaN(totalSeconds) || totalSeconds < 0) return "00:00:00:00";
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  const pad = (num: number) => String(num).padStart(2, "0");
+  return `${pad(days)}:${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+};
+
+export const formatTimerSeconds = (totalSeconds: number): string => {
+  return formatTimerDDHHMMSS(totalSeconds);
+};
+
+export const calculateTicketTimers = (
+  ticket: Ticket,
+  nowMs: number = Date.now(),
+  isBengkelOpen: boolean = true,
+  isOvertimeActive: boolean = false,
+  overtimeTicketIds: string[] = [],
+  debriefFrozenAt?: string | null,
+  overtimeStoppedAt?: string | null
+): { activeSeconds: number; pauseSeconds: number; activeTimer: string; pauseTimer: string } => {
+  let activeSeconds = parseDDHHMMSSToSeconds(ticket.activeTimer);
+  let pauseSeconds = parseDDHHMMSSToSeconds(ticket.pauseTimer);
+
+  // Check if live timer is currently allowed to run for this card based on store & overtime state
+  let isLiveRunning = false;
+  if (ticket.status === "active" || ticket.status === "pending") {
+    if (isBengkelOpen) {
+      isLiveRunning = true;
+    } else if (isOvertimeActive) {
+      const isOvertimeTicket =
+        overtimeTicketIds.includes(ticket.id) || !!ticket.overtimeMechanic;
+      if (isOvertimeTicket) {
+        isLiveRunning = true;
+      }
+    }
+  }
+
+  if (isLiveRunning) {
+    let lastChangeStr: string | null | undefined = ticket.lastStatusChange;
+    if (!lastChangeStr) {
+      if (ticket.status === "active") {
+        lastChangeStr = ticket.timestamps?.called;
+      } else if (ticket.status === "pending" || ticket.status === "waiting") {
+        lastChangeStr = ticket.timestamps?.arrival;
+      }
+    }
+
+    if (lastChangeStr) {
+      const startTime = new Date(lastChangeStr).getTime();
+      let endMs = nowMs;
+
+      if (debriefFrozenAt) {
+        endMs = Math.min(endMs, new Date(debriefFrozenAt).getTime());
+      }
+      if (overtimeStoppedAt && (overtimeTicketIds.includes(ticket.id) || ticket.overtimeMechanic)) {
+        endMs = Math.min(endMs, new Date(overtimeStoppedAt).getTime());
+      }
+
+      if (!isNaN(startTime) && endMs > startTime) {
+        const elapsed = Math.floor((endMs - startTime) / 1000);
+        if (ticket.status === "active") {
+          activeSeconds += elapsed;
+        } else if (ticket.status === "pending") {
+          pauseSeconds += elapsed;
+        }
+      }
+    }
+  }
+
+  return {
+    activeSeconds,
+    pauseSeconds,
+    activeTimer: formatTimerDDHHMMSS(activeSeconds),
+    pauseTimer: formatTimerDDHHMMSS(pauseSeconds),
+  };
+};
+
+export const calculateTicketWorkDurationSeconds = (
+  ticket: Ticket,
+  nowMs: number = Date.now(),
+  isBengkelOpen: boolean = true,
+  isOvertimeActive: boolean = false,
+  overtimeTicketIds: string[] = [],
+  debriefFrozenAt?: string | null,
+  overtimeStoppedAt?: string | null
+): number => {
+  const { activeSeconds, pauseSeconds } = calculateTicketTimers(
+    ticket,
+    nowMs,
+    isBengkelOpen,
+    isOvertimeActive,
+    overtimeTicketIds,
+    debriefFrozenAt,
+    overtimeStoppedAt
+  );
+  return Math.max(0, activeSeconds - pauseSeconds);
+};
+
 

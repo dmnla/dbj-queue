@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   PlusCircle,
   AlertCircle,
+  PauseCircle,
   Copy,
   UploadCloud,
   Trash2,
@@ -3460,6 +3461,60 @@ export const FollowUpModal = ({ isOpen, onClose, ticket, onConfirm }: any) => {
           </button>
         </div>
       </form>
+    </ModalBase>
+  );
+};
+
+export const MechanicPauseWarningModal = ({
+  isOpen,
+  onClose,
+  mechanicName,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  mechanicName: string;
+  onConfirm: () => void;
+}) => {
+  return (
+    <ModalBase title="Konfirmasi Pause Pekerjaan" isOpen={isOpen} onClose={onClose}>
+      <div className="space-y-6">
+        <div className="bg-amber-50 border-2 border-amber-200 p-4 rounded-xl flex items-start gap-3">
+          <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={24} />
+          <div>
+            <h4 className="font-bold text-amber-900 text-sm uppercase tracking-wide mb-1">
+              Peringatan Pekerjaan Aktif
+            </h4>
+            <p className="text-sm font-semibold text-amber-800 leading-relaxed">
+              pekerjaan <span className="font-black text-amber-950 underline">{mechanicName}</span> yang lainnya akan di-pause.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+          Satu mekanik hanya diperbolehkan memiliki 1 kartu aktif yang berjalan di kolom Dikerjakan. Memulai pengerjaan ini akan menunda (pause) kartu aktif milik {mechanicName} yang sedang berjalan.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-all"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3.5 rounded-xl font-black uppercase tracking-wider text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
+          >
+            <PauseCircle size={18} /> Ya, Pause & Lanjutkan
+          </button>
+        </div>
+      </div>
     </ModalBase>
   );
 };

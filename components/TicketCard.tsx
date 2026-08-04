@@ -1,8 +1,103 @@
 
 import React from 'react';
 import { Ticket } from '../types';
-import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, Clock, Link2 } from 'lucide-react';
-import { formatTime } from '../services/ticketService';
+import { User, Phone, Wrench, AlertCircle, Bike, Ban, UserCog, StickyNote, Edit, Clock, Link2, PauseCircle, PlayCircle } from 'lucide-react';
+import { formatTime, calculateTicketTimers, formatTimerSeconds } from '../services/ticketService';
+
+interface TicketTimerDisplayProps {
+  ticket: Ticket;
+  isBengkelOpen?: boolean;
+  isOvertimeActive?: boolean;
+  overtimeTicketIds?: string[];
+  debriefFrozenAt?: string | null;
+  overtimeStoppedAt?: string | null;
+}
+
+const TicketTimerDisplay: React.FC<TicketTimerDisplayProps> = ({
+  ticket,
+  isBengkelOpen = true,
+  isOvertimeActive = false,
+  overtimeTicketIds = [],
+  debriefFrozenAt,
+  overtimeStoppedAt,
+}) => {
+  const isRunning = ticket.status === 'active' || ticket.status === 'pending';
+  const [nowMs, setNowMs] = React.useState<number>(Date.now());
+
+  React.useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRunning, ticket.id, ticket.status]);
+
+  const { activeTimer, pauseTimer } = calculateTicketTimers(
+    ticket,
+    nowMs,
+    isBengkelOpen,
+    isOvertimeActive,
+    overtimeTicketIds,
+    debriefFrozenAt,
+    overtimeStoppedAt
+  );
+
+  return (
+    <div className="grid grid-cols-2 gap-1.5 my-1">
+      {/* Active Timer Box */}
+      <div
+        className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
+          ticket.status === 'active'
+            ? 'bg-blue-50 border-blue-200 text-blue-900 ring-1 ring-blue-300/40'
+            : 'bg-slate-50 border-slate-200 text-slate-700'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-1 text-[9px] font-black uppercase tracking-wider text-slate-500">
+          <span className="flex items-center gap-1">
+            <PlayCircle size={10} className={ticket.status === 'active' ? 'text-blue-600' : 'text-slate-400'} />
+            ActiveTimer
+          </span>
+          {ticket.status === 'active' && (
+            <span className="flex h-2 w-2 relative" title="Pengerjaan Aktif">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+            </span>
+          )}
+        </div>
+        <div className="font-mono font-black text-xs tracking-tight mt-1 text-slate-800">
+          {activeTimer}
+        </div>
+      </div>
+
+      {/* Pause Timer Box */}
+      <div
+        className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
+          ticket.status === 'pending'
+            ? 'bg-amber-50 border-amber-200 text-amber-900 ring-1 ring-amber-300/40'
+            : 'bg-slate-50 border-slate-200 text-slate-700'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-1 text-[9px] font-black uppercase tracking-wider text-slate-500">
+          <span className="flex items-center gap-1">
+            <PauseCircle size={10} className={ticket.status === 'pending' ? 'text-amber-600' : 'text-slate-400'} />
+            PauseTimer
+          </span>
+          {ticket.status === 'pending' && (
+            <span className="flex h-2 w-2 relative" title="Penundaan Aktif">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
+            </span>
+          )}
+        </div>
+        <div className="font-mono font-black text-xs tracking-tight mt-1 text-slate-800">
+          {pauseTimer}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -17,6 +112,11 @@ interface TicketCardProps {
   compact?: boolean;
   customActions?: React.ReactNode;
   locked?: boolean;
+  isBengkelOpen?: boolean;
+  isOvertimeActive?: boolean;
+  overtimeTicketIds?: string[];
+  debriefFrozenAt?: string | null;
+  overtimeStoppedAt?: string | null;
 }
 
 const TicketCard: React.FC<TicketCardProps> = ({ 
@@ -31,7 +131,12 @@ const TicketCard: React.FC<TicketCardProps> = ({
   onReconcile,
   compact = false,
   customActions,
-  locked = false
+  locked = false,
+  isBengkelOpen = true,
+  isOvertimeActive = false,
+  overtimeTicketIds = [],
+  debriefFrozenAt,
+  overtimeStoppedAt,
 }) => {
   const getStatusColor = () => {
     switch (ticket.status) {
@@ -252,6 +357,16 @@ const TicketCard: React.FC<TicketCardProps> = ({
             </div>
         )}
       </div>
+
+      {/* Accumulated Tracking Timers */}
+      <TicketTimerDisplay
+        ticket={ticket}
+        isBengkelOpen={isBengkelOpen}
+        isOvertimeActive={isOvertimeActive}
+        overtimeTicketIds={overtimeTicketIds}
+        debriefFrozenAt={debriefFrozenAt}
+        overtimeStoppedAt={overtimeStoppedAt}
+      />
 
        {ticket.notes && (
         <div className={`flex items-start gap-2 text-[10px] p-2 rounded border leading-snug ${ticket.status === 'pending' ? 'bg-orange-50 border-orange-100 text-orange-700' : 'bg-yellow-50 border-yellow-100 text-slate-600'}`}>

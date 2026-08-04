@@ -24,6 +24,8 @@ import {
   updateTicketInCloud,
   updateOperationalConfigInCloud,
   isTicketExcludedFromFollowUp,
+  calculateTicketWorkDurationSeconds,
+  formatTimerDDHHMMSS,
 } from "../services/ticketService";
 
 const normalizeOrderId = (id: string | null | undefined): string => {
@@ -54,6 +56,20 @@ export const calculateTicketDuration = (
   overtimeTicketIds: string[],
   overtimeStoppedAt?: string | null,
 ): string => {
+  const netSeconds = calculateTicketWorkDurationSeconds(
+    t,
+    Date.now(),
+    isBengkelOpen,
+    isOvertimeActive,
+    overtimeTicketIds,
+    isDebriefInProgress ? debriefFrozenAt : null,
+    overtimeStoppedAt
+  );
+
+  if (netSeconds > 0 || t.activeTimer || t.pauseTimer) {
+    return formatTimerDDHHMMSS(netSeconds);
+  }
+
   let startTimeStr = t.lastStatusChange;
   if (!startTimeStr) {
     if (t.status === "waiting") {

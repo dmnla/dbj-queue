@@ -7,6 +7,7 @@ import {
   Link,
 } from "react-router-dom";
 import Layout from "./components/Layout";
+import { MechanicPauseWarningModal } from "./components/Modals";
 import Dashboard from "./pages/Dashboard";
 import MechanicMode from "./pages/MechanicMode";
 import CustomerDisplay from "./pages/CustomerDisplay";
@@ -352,6 +353,12 @@ function App() {
     addTicketToCloud(currentBranch, name, phone, unit, svcs, notes, customerId, dealposOrderId, flags, serviceSkuCodes, dealposOrderNumber);
   };
 
+  const [mechanicPauseWarning, setMechanicPauseWarning] = useState<{
+    isOpen: boolean;
+    mechanicName: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   const updateTicketStatus = (
     id: string,
     status: TicketStatus,
@@ -367,6 +374,51 @@ function App() {
     }
     const ticketToUpdate = tickets.find((t) => t.id === id);
     if (!ticketToUpdate) return;
+
+    const targetMechanic = mechanic || ticketToUpdate.mechanic || ticketToUpdate.overtimeMechanic;
+
+    if (status === "active" && targetMechanic) {
+      // Find pre-existing active cards for this mechanic in the same branch
+      const existingActiveTickets = branchTickets.filter(
+        (t) =>
+          t.id !== id &&
+          t.status === "active" &&
+          (t.mechanic === targetMechanic || t.overtimeMechanic === targetMechanic)
+      );
+
+      if (existingActiveTickets.length > 0) {
+        setMechanicPauseWarning({
+          isOpen: true,
+          mechanicName: targetMechanic,
+          onConfirm: () => {
+            // Pause all other active cards for this mechanic
+            existingActiveTickets.forEach((otherTicket) => {
+              updateTicketStatusInCloud(
+                otherTicket.id,
+                otherTicket,
+                "pending",
+                undefined,
+                undefined,
+                "Tunda otomatis (memulai pekerjaan lain)"
+              );
+            });
+            // Move selected ticket to active
+            updateTicketStatusInCloud(
+              id,
+              ticketToUpdate,
+              status,
+              mechanic,
+              notes,
+              reason,
+              followUpResult,
+              followUpPhotoUrl
+            );
+          },
+        });
+        return;
+      }
+    }
+
     updateTicketStatusInCloud(
       id,
       ticketToUpdate,
@@ -632,6 +684,14 @@ function App() {
           }
         />
       </Routes>
+      {mechanicPauseWarning && (
+        <MechanicPauseWarningModal
+          isOpen={mechanicPauseWarning.isOpen}
+          onClose={() => setMechanicPauseWarning(null)}
+          mechanicName={mechanicPauseWarning.mechanicName}
+          onConfirm={mechanicPauseWarning.onConfirm}
+        />
+      )}
     </Router>
   );
 }

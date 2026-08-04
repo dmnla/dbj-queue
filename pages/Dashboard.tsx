@@ -418,6 +418,11 @@ const Dashboard: React.FC<DashboardProps> = ({
               }
               onReconcile={handleReconcile}
               locked={isTicketLockedForAdmin(t)}
+              isBengkelOpen={isBengkelOpen}
+              isOvertimeActive={isOvertimeActive}
+              overtimeTicketIds={overtimeTicketIds}
+              debriefFrozenAt={debriefFrozenAt}
+              overtimeStoppedAt={overtimeStoppedAt}
             />
           ))}
         </Column>
@@ -453,6 +458,11 @@ const Dashboard: React.FC<DashboardProps> = ({
               }
               onReconcile={handleReconcile}
               locked={isTicketLockedForAdmin(t)}
+              isBengkelOpen={isBengkelOpen}
+              isOvertimeActive={isOvertimeActive}
+              overtimeTicketIds={overtimeTicketIds}
+              debriefFrozenAt={debriefFrozenAt}
+              overtimeStoppedAt={overtimeStoppedAt}
             />
           ))}
         </Column>
@@ -472,6 +482,11 @@ const Dashboard: React.FC<DashboardProps> = ({
               onAction={() => updateTicketStatus(t.id, "taken")}
               onReconcile={handleReconcile}
               locked={isTicketLockedForAdmin(t)}
+              isBengkelOpen={isBengkelOpen}
+              isOvertimeActive={isOvertimeActive}
+              overtimeTicketIds={overtimeTicketIds}
+              debriefFrozenAt={debriefFrozenAt}
+              overtimeStoppedAt={overtimeStoppedAt}
             />
           ))}
         </Column>
@@ -490,6 +505,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                 ticket={t}
                 onReconcile={handleReconcile}
                 locked={isTicketLockedForAdmin(t)}
+                isBengkelOpen={isBengkelOpen}
+                isOvertimeActive={isOvertimeActive}
+                overtimeTicketIds={overtimeTicketIds}
+                debriefFrozenAt={debriefFrozenAt}
+                overtimeStoppedAt={overtimeStoppedAt}
                 customActions={
                   <div className="mt-2 text-center">
                     <button
