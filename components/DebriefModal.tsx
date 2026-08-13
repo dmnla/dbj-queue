@@ -18,6 +18,7 @@ import {
   Wrench,
   Search,
   ChevronDown,
+  XCircle,
 } from "lucide-react";
 import { Ticket, MechanicDefinition, Branch, flag_type } from "../types";
 import {
@@ -1236,12 +1237,32 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
               Wizard Tutup Bengkel & Evaluasi
             </h3>
           </div>
-          <button
-            onClick={handleCloseDebriefModal}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {isDebriefInProgress && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm("Apakah Anda yakin ingin membatalkan debrief dan membuka kembali antrian operasional?")) {
+                    await updateOperationalConfigInCloud(branch, {
+                      isBengkelOpen: true,
+                      isDebriefInProgress: false,
+                      debriefFrozenAt: null,
+                    });
+                    handleCloseDebriefModal();
+                  }
+                }}
+                className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-3 py-1.5 rounded-xl border border-rose-200 transition-all flex items-center gap-1 active:scale-95"
+              >
+                <XCircle size={15} /> Batal Rekap
+              </button>
+            )}
+            <button
+              onClick={handleCloseDebriefModal}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* STEPPER PROGRESS */}
@@ -2555,6 +2576,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                 )}
               </div>
 
+              <div className="bg-amber-50 border border-amber-200/80 p-3 rounded-xl text-xs font-bold text-amber-900 leading-relaxed">
+                ⚠️ <strong>Perhatian:</strong> Meng-copy teks laporan TIDAK otomatis menutup toko. Anda HARUS menekan tombol <strong>SELESAI & TUTUP TOKO</strong> di bawah ini untuk mereset dan menutup operasional hari ini secara resmi.
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">
                   Laporan WhatsApp Format
@@ -2581,24 +2606,23 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                   </button>
                 </div>
 
-                <div className="flex gap-2">
-                  {hasMonthlyRekap ? (
+                <div className="flex flex-wrap gap-2">
+                  {hasMonthlyRekap && (
                     <button
                       onClick={() => setStep(9)}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95 flex items-center gap-1"
+                      className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95 flex items-center gap-1"
                     >
                       Lanjut Rekap Bulanan <ChevronRight size={14} />
                     </button>
-                  ) : (
-                    <button
-                      onClick={handleFinalizeDebrief}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95"
-                    >
-                      {hasOvertimeToday
-                        ? "🔋 MULAI OVERTIME & SELESAI"
-                        : "🔒 SELESAI & TUTUP TOKO"}
-                    </button>
                   )}
+                  <button
+                    onClick={handleFinalizeDebrief}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow transition-all active:scale-95"
+                  >
+                    {hasOvertimeToday
+                      ? "🔋 MULAI OVERTIME & SELESAI"
+                      : "🔒 SELESAI & TUTUP TOKO"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -2617,6 +2641,10 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                     digenerate untuk grup management.
                   </p>
                 </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200/80 p-3 rounded-xl text-xs font-bold text-amber-900 leading-relaxed">
+                ⚠️ <strong>Perhatian:</strong> Meng-copy rekap bulanan TIDAK otomatis menutup toko. Anda HARUS menekan tombol <strong>SELESAI & TUTUP TOKO</strong> di bawah untuk mereset dan menutup operasional hari ini secara resmi.
               </div>
 
               <div className="space-y-2">

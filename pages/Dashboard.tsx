@@ -329,16 +329,31 @@ const Dashboard: React.FC<DashboardProps> = ({
               </button>
             )
           ) : isBengkelOpen ? (
-            <button
-              onClick={() => setIsDebriefModalOpen(true)}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow flex items-center gap-1.5 transition-all ${
-                isDebriefInProgress
-                  ? "bg-amber-600 hover:bg-amber-700 text-white animate-pulse"
-                  : "bg-rose-600 hover:bg-rose-700 text-white"
-              }`}
-            >
-              {isDebriefInProgress ? "🔄 LANJUT REKAP" : "TUTUP TOKO"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsDebriefModalOpen(true)}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow flex items-center gap-1.5 transition-all ${
+                  isDebriefInProgress
+                    ? "bg-amber-600 hover:bg-amber-700 text-white animate-pulse"
+                    : "bg-rose-600 hover:bg-rose-700 text-white"
+                }`}
+              >
+                {isDebriefInProgress ? "🔄 LANJUT REKAP" : "TUTUP TOKO"}
+              </button>
+              {isDebriefInProgress && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Apakah Anda yakin ingin membatalkan debrief dan membuka kembali antrian operasional?")) {
+                      onToggleBengkelOpen?.(true);
+                    }
+                  }}
+                  title="Batalkan debrief dan buka kembali operasional"
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap"
+                >
+                  ❌ BATAL REKAP
+                </button>
+              )}
+            </div>
           ) : (
             <button
               onClick={() => onToggleBengkelOpen?.(true)}

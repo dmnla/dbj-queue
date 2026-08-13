@@ -165,10 +165,34 @@ function App() {
     let unsubscribeOps = () => {};
     if (currentBranch) {
       unsubscribeOps = subscribeToOperationalStatus(currentBranch, (data) => {
-        setIsBengkelOpen(data.isBengkelOpen);
+        let debriefInProgress = !!data.isDebriefInProgress;
+        let debriefFrozen = data.debriefFrozenAt || null;
+        let bengkelOpen = data.isBengkelOpen;
+
+        // Auto-cleanup stale debrief from previous calendar days or > 12 hours old
+        if (debriefInProgress && debriefFrozen) {
+          const frozenDate = new Date(debriefFrozen);
+          const now = new Date();
+          const isPastDate = frozenDate.toDateString() !== now.toDateString() && frozenDate < now;
+          const isStaleHours = (now.getTime() - frozenDate.getTime()) > (12 * 60 * 60 * 1000);
+
+          if (isPastDate || isStaleHours) {
+            console.warn("Detected stale debrief session from previous day/time, auto-clearing debrief status in cloud.");
+            updateOperationalConfigInCloud(currentBranch, {
+              isBengkelOpen: false,
+              isDebriefInProgress: false,
+              debriefFrozenAt: null,
+            });
+            debriefInProgress = false;
+            debriefFrozen = null;
+            bengkelOpen = false;
+          }
+        }
+
+        setIsBengkelOpen(bengkelOpen);
         setIsOvertimeActive(data.isOvertimeActive);
-        setIsDebriefInProgress(!!data.isDebriefInProgress);
-        setDebriefFrozenAt(data.debriefFrozenAt || null);
+        setIsDebriefInProgress(debriefInProgress);
+        setDebriefFrozenAt(debriefFrozen);
         setOvertimeTicketIds(data.overtimeTicketIds || []);
         setOvertimeStoppedAt(data.overtimeStoppedAt || null);
       });
