@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { Ticket, Branch, MechanicDefinition, flag_type } from "../types";
 import { calculateTicketTimers } from "../services/ticketService";
 import {
@@ -20,7 +21,8 @@ import {
   X,
   Search,
   Eye,
-  Zap
+  Zap,
+  FileSpreadsheet
 } from "lucide-react";
 
 /**
@@ -60,10 +62,10 @@ export const calculateActiveWorkingMs = (startStr: string, endStr: string): numb
 };
 
 /**
- * Formats active working duration into `00D 00H 00M` format.
+ * Formats active working duration into `DD:HH:MM` format.
  */
 export const formatActiveDuration = (ms: number): string => {
-  if (isNaN(ms) || ms <= 0) return "00D 00H 00M";
+  if (isNaN(ms) || ms <= 0) return "00:00:00";
   const totalMinutes = Math.floor(ms / (1000 * 60));
   const totalHours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -71,7 +73,7 @@ export const formatActiveDuration = (ms: number): string => {
   const hours = totalHours % 24;
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(days)}D ${pad(hours)}H ${pad(minutes)}M`;
+  return `${pad(days)}:${pad(hours)}:${pad(minutes)}`;
 };
 import {
   ResponsiveContainer,
@@ -120,6 +122,8 @@ export const Performance: React.FC<PerformanceProps> = ({
       readyStr: string;
       activeMs: number;
       activeDurationStr: string;
+      activeTimerStr: string;
+      pauseTimerStr: string;
     }>;
   } | null>(null);
 
@@ -435,6 +439,18 @@ export const Performance: React.FC<PerformanceProps> = ({
 
       const kendalaTickets = mechTickets.filter(t => t.followUpResult?.trim().toUpperCase() === "KENDALA");
 
+      const ticketDetails: Array<{
+        ticket: Ticket;
+        mulaiStr: string;
+        readyStr: string;
+        activeSeconds: number;
+        pauseSeconds: number;
+        speedMs: number;
+        activeTimerStr: string;
+        pauseTimerStr: string;
+        durasiPengerjaanStr: string;
+      }> = [];
+
       const serviceMap: {
         [serviceName: string]: {
           totalMs: number;
@@ -445,6 +461,8 @@ export const Performance: React.FC<PerformanceProps> = ({
             readyStr: string;
             activeMs: number;
             activeDurationStr: string;
+            activeTimerStr: string;
+            pauseTimerStr: string;
           }>;
         };
       } = {};
@@ -458,8 +476,16 @@ export const Performance: React.FC<PerformanceProps> = ({
 
         const { activeSeconds, pauseSeconds } = calculateTicketTimers(t);
 
+        // Fallback for legacy tickets without timer tracking
+        let effectiveSecForTicket = activeSeconds;
+        let pauseSecForTicket = pauseSeconds;
+
+        if (effectiveSecForTicket === 0 && pauseSecForTicket === 0 && (mulaiStr && readyStr)) {
+          effectiveSecForTicket = Math.floor(calculateActiveWorkingMs(mulaiStr, readyStr) / 1000);
+        }
+
         // Jam kerja efektif = total sum of activeTimer for all cards for each mechanic
-        totalEfektifActiveSec += activeSeconds;
+        totalEfektifActiveSec += effectiveSecForTicket;
 
         // Speed is counted based on activeTimer + pauseTimer
         const totalTimerSeconds = activeSeconds + pauseSeconds;
@@ -469,11 +495,25 @@ export const Performance: React.FC<PerformanceProps> = ({
           speedMs = calculateActiveWorkingMs(mulaiStr, readyStr);
         }
 
+        const activeDurationStr = formatActiveDuration(speedMs);
+        const activeTimerStr = formatActiveDuration(effectiveSecForTicket * 1000);
+        const pauseTimerStr = formatActiveDuration(pauseSecForTicket * 1000);
+
+        ticketDetails.push({
+          ticket: t,
+          mulaiStr,
+          readyStr,
+          activeSeconds: effectiveSecForTicket,
+          pauseSeconds: pauseSecForTicket,
+          speedMs,
+          activeTimerStr,
+          pauseTimerStr,
+          durasiPengerjaanStr: activeDurationStr
+        });
+
         if (speedMs > 0 || (mulaiStr && readyStr)) {
           totalSpeedMsAll += speedMs;
           totalReadyTicketsCount++;
-
-          const activeDurationStr = formatActiveDuration(speedMs);
 
           const serviceList = (t.serviceTypes && t.serviceTypes.length > 0)
             ? t.serviceTypes
@@ -491,7 +531,9 @@ export const Performance: React.FC<PerformanceProps> = ({
               mulaiStr,
               readyStr,
               activeMs: speedMs,
-              activeDurationStr
+              activeDurationStr,
+              activeTimerStr,
+              pauseTimerStr
             });
           });
         }
@@ -523,7 +565,8 @@ export const Performance: React.FC<PerformanceProps> = ({
         services,
         overallSpeedStr,
         jamKerjaEfektifStr,
-        totalEfektifActiveSec
+        totalEfektifActiveSec,
+        ticketDetails
       };
     }).sort((a, b) => b.totalTickets - a.totalTickets);
   }, [mechanics, tickets, activePeriod, currentBranch]);
@@ -538,6 +581,168 @@ export const Performance: React.FC<PerformanceProps> = ({
     if (selectedPeriodIndex > 0) {
       setSelectedPeriodIndex(prev => prev - 1);
     }
+  };
+
+  // Helper date formatter for export
+  const formatExportDT = (dtStr?: string) => {
+    if (!dtStr) return "-";
+    const d = new Date(dtStr);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  const handleExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Detail Performa Mekanik
+    const rows: any[][] = [];
+
+    // Header metadata
+    rows.push([`LAPORAN PERFORMA SERVIS MEKANIK - DAILY BIKE`]);
+    rows.push([`Cabang: ${branchLabel.toUpperCase()}`]);
+    rows.push([`Periode: ${activePeriod.label} (${activePeriod.subtext})`]);
+    rows.push([]); // blank row
+
+    mechanicServicePerformance.forEach((m) => {
+      // Mechanic Section Header
+      rows.push([
+        `MEKANIK: ${m.name.toUpperCase()}`,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        `TOTAL JAM KERJA EFEKTIF: ${m.jamKerjaEfektifStr}`
+      ]);
+
+      // Table Column Headers
+      rows.push([
+        "No",
+        "Nama Mekanik",
+        "Kontak & Pelanggan",
+        "Sepeda / Unit",
+        "Layanan / Servis",
+        "Jam Mulai",
+        "Jam Siap",
+        "Active Timer",
+        "Pause Timer",
+        "Durasi Pengerjaan"
+      ]);
+
+      if (m.ticketDetails.length === 0) {
+        rows.push(["-", m.name, "Tidak ada pengerjaan unit pada periode ini", "-", "-", "-", "-", "-", "-", "-"]);
+      } else {
+        m.ticketDetails.forEach((td, idx) => {
+          const contactStr = `${td.ticket.customerName || "-"} (${td.ticket.phone || "-"})`;
+          const serviceStr = (td.ticket.serviceTypes && td.ticket.serviceTypes.length > 0)
+            ? td.ticket.serviceTypes.join(", ")
+            : "Servis Umum";
+
+          rows.push([
+            idx + 1,
+            m.name,
+            contactStr,
+            td.ticket.unitSepeda || "-",
+            serviceStr,
+            formatExportDT(td.mulaiStr),
+            formatExportDT(td.readyStr),
+            td.activeTimerStr,
+            td.pauseTimerStr,
+            td.durasiPengerjaanStr
+          ]);
+        });
+      }
+
+      // Mechanic Subtotal Row
+      rows.push([
+        "TOTAL",
+        m.name,
+        `Total Pengerjaan: ${m.ticketDetails.length} Unit`,
+        "",
+        "",
+        "",
+        "TOTAL ACTIVE TIMER:",
+        m.jamKerjaEfektifStr,
+        "",
+        `Rata-Rata Speed: ${m.overallSpeedStr}`
+      ]);
+
+      // Spacing rows between mechanics
+      rows.push([]);
+      rows.push([]);
+    });
+
+    const wsDetail = XLSX.utils.aoa_to_sheet(rows);
+
+    // Set column widths
+    wsDetail["!cols"] = [
+      { wch: 6 },  // No
+      { wch: 18 }, // Nama Mekanik
+      { wch: 30 }, // Kontak & Pelanggan
+      { wch: 24 }, // Sepeda / Unit
+      { wch: 28 }, // Layanan / Servis
+      { wch: 20 }, // Jam Mulai
+      { wch: 20 }, // Jam Siap
+      { wch: 16 }, // Active Timer
+      { wch: 16 }, // Pause Timer
+      { wch: 18 }  // Durasi Pengerjaan
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsDetail, "Detail Performa Mekanik");
+
+    // Sheet 2: Ringkasan Performa Mekanik
+    const summaryRows: any[][] = [
+      [`RINGKASAN PERFORMA MEKANIK - CABANG ${branchLabel.toUpperCase()}`],
+      [`Periode: ${activePeriod.label} (${activePeriod.subtext})`],
+      [],
+      [
+        "No",
+        "Nama Mekanik",
+        "Total Unit Servis",
+        "Total Jam Kerja Efektif",
+        "Rata-Rata Kecepatan / Unit",
+        "Servis Berhasil",
+        "Servis Kendala"
+      ]
+    ];
+
+    mechanicServicePerformance.forEach((m, idx) => {
+      summaryRows.push([
+        idx + 1,
+        m.name,
+        m.totalTickets,
+        m.jamKerjaEfektifStr,
+        m.overallSpeedStr,
+        m.berhasilCount,
+        m.kendalaCount
+      ]);
+    });
+
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    wsSummary["!cols"] = [
+      { wch: 6 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 24 },
+      { wch: 26 },
+      { wch: 16 },
+      { wch: 16 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan Mekanik");
+
+    const safeBranch = currentBranch.toUpperCase();
+    const safePeriod = activePeriod.label.replace(/[^a-zA-Z0-9]/g, "_");
+    XLSX.writeFile(wb, `DailyBike_Performa_Mekanik_${safeBranch}_${safePeriod}.xlsx`);
   };
 
   return (
@@ -996,9 +1201,20 @@ export const Performance: React.FC<PerformanceProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-600 self-start md:self-auto">
-            <Clock size={14} className="text-slate-400" />
-            <span>Jam Kerja Aktif: <b>08:00 - 17:00</b> (17:00 - 08:00 tidak dihitung)</span>
+          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-600">
+              <Clock size={14} className="text-slate-400" />
+              <span>Jam Kerja Aktif: <b>08:00 - 17:00</b></span>
+            </div>
+
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition-all cursor-pointer"
+              title={`Download Excel Detail Performa Mekanik (${activePeriod.label})`}
+            >
+              <FileSpreadsheet size={15} />
+              <span>Download Excel</span>
+            </button>
           </div>
         </div>
 
@@ -1134,7 +1350,7 @@ export const Performance: React.FC<PerformanceProps> = ({
       {/* SERVICE DETAIL POP-UP MODAL */}
       {activeServiceModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
             <div className="p-6 bg-slate-900 text-white flex items-start justify-between gap-4">
               <div>
@@ -1190,6 +1406,8 @@ export const Performance: React.FC<PerformanceProps> = ({
                     <th className="py-3 px-3">Sepeda / Unit</th>
                     <th className="py-3 px-3">Jam Mulai</th>
                     <th className="py-3 px-3">Jam Siap</th>
+                    <th className="py-3 px-3 text-center">Active Timer</th>
+                    <th className="py-3 px-3 text-center">Pause Timer</th>
                     <th className="py-3 px-3 text-right">Durasi Pengerjaan</th>
                   </tr>
                 </thead>
@@ -1229,13 +1447,23 @@ export const Performance: React.FC<PerformanceProps> = ({
                               {item.ticket.unitSepeda || "Sepeda N/A"}
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-slate-600 font-medium">
+                          <td className="py-3 px-3 text-slate-600 font-medium whitespace-nowrap">
                             {formatDT(item.mulaiStr)}
                           </td>
-                          <td className="py-3 px-3 text-slate-600 font-medium">
+                          <td className="py-3 px-3 text-slate-600 font-medium whitespace-nowrap">
                             {formatDT(item.readyStr)}
                           </td>
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span className="bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-emerald-200/80">
+                              {item.activeTimerStr}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span className="bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-amber-200/80">
+                              {item.pauseTimerStr}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
                             <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-slate-200">
                               {item.activeDurationStr}
                             </span>
