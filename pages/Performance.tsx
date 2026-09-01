@@ -384,20 +384,18 @@ export const Performance: React.FC<PerformanceProps> = ({
     const end = activePeriod.endDate;
 
     // Filter tickets in active period for current branch
-    // ONLY count cards with status === 'done' and non-empty followUpResult, matched by follow-up date (timestamps.finished)
+    // Based on tanggal siap / jam siap (timestamps.ready)
     const periodTickets = tickets.filter(t => {
       if (t.branch !== currentBranch) return false;
       if (t.status === "cancelled") return false;
-      if (t.status !== "done") return false;
-      if (!t.followUpResult || t.followUpResult.trim() === "") return false;
 
-      const followUpDateStr = t.timestamps?.finished;
-      if (!followUpDateStr) return false;
+      const readyDateStr = t.timestamps?.ready;
+      if (!readyDateStr) return false;
 
-      const followUpDate = new Date(followUpDateStr);
-      if (isNaN(followUpDate.getTime())) return false;
+      const readyDate = new Date(readyDateStr);
+      if (isNaN(readyDate.getTime())) return false;
 
-      return followUpDate >= start && followUpDate <= end;
+      return readyDate >= start && readyDate <= end;
     });
 
     // Get mechanics relevant to current branch or period tickets
