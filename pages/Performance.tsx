@@ -22,7 +22,9 @@ import {
   Search,
   Eye,
   Zap,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ClipboardCheck,
+  Users
 } from "lucide-react";
 
 /**
@@ -62,18 +64,16 @@ export const calculateActiveWorkingMs = (startStr: string, endStr: string): numb
 };
 
 /**
- * Formats active working duration into `DD:HH:MM` format.
+ * Formats active working duration into total hours and minutes (e.g., "145 Jam 20 Menit" or "0 Jam 45 Menit").
  */
 export const formatActiveDuration = (ms: number): string => {
-  if (isNaN(ms) || ms <= 0) return "00:00:00";
+  if (isNaN(ms) || ms <= 0) return "0 Jam 00 Menit";
   const totalMinutes = Math.floor(ms / (1000 * 60));
-  const totalHours = Math.floor(totalMinutes / 60);
+  const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(days)}:${pad(hours)}:${pad(minutes)}`;
+  return `${hours} Jam ${pad(minutes)} Menit`;
 };
 import {
   ResponsiveContainer,
@@ -110,6 +110,7 @@ export const Performance: React.FC<PerformanceProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<"monthly" | "yearly">("monthly");
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<"operational" | "mechanics">("operational");
 
   // Popout modal states for mechanic service & kendala
   const [activeServiceModal, setActiveServiceModal] = useState<{
@@ -284,11 +285,19 @@ export const Performance: React.FC<PerformanceProps> = ({
       t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP")
     ).length;
 
+    // Helper to determine the single last assigned mechanic for a ticket
+    const getFinalMechanic = (t: Ticket): string => {
+      const mech = (t.overtimeMechanic && t.overtimeMechanic.trim()) ? t.overtimeMechanic.trim() : (t.mechanic ? t.mechanic.trim() : "");
+      return mech.toUpperCase();
+    };
+
     // Mechanics list calculated from filtered (truly done tickets)
+    // Counts cards strictly for the last assigned mechanic (overtimeMechanic if changed during lembur, else mechanic)
     const mechanicPerformance = mechanics.map(m => {
+      const nameUpper = m.name.trim().toUpperCase();
       const picTickets = filtered.filter(t => {
-        const nameUpper = m.name.trim().toUpperCase();
-        return (t.mechanic?.trim().toUpperCase() === nameUpper) || (t.overtimeMechanic?.trim().toUpperCase() === nameUpper);
+        const assignedUpper = getFinalMechanic(t);
+        return assignedUpper === nameUpper || assignedUpper === m.id.toUpperCase();
       });
 
       const selesaiPicCount = picTickets.filter(t => !isGaransiTicket(t)).length;
@@ -398,14 +407,19 @@ export const Performance: React.FC<PerformanceProps> = ({
       return readyDate >= start && readyDate <= end;
     });
 
+    // Helper to determine the single last assigned mechanic for a ticket
+    const getFinalMechanic = (t: Ticket): string => {
+      const mech = (t.overtimeMechanic && t.overtimeMechanic.trim()) ? t.overtimeMechanic.trim() : (t.mechanic ? t.mechanic.trim() : "");
+      return mech.toUpperCase();
+    };
+
     // Get mechanics relevant to current branch or period tickets
     const relevantMechanics = mechanics.filter(m => {
       const isBranch = m.branches && m.branches.includes(currentBranch);
       const nameUpper = m.name.trim().toUpperCase();
       const hasTickets = periodTickets.some(t => {
-        const mechUpper = t.mechanic?.trim().toUpperCase();
-        const overUpper = t.overtimeMechanic?.trim().toUpperCase();
-        return mechUpper === nameUpper || overUpper === nameUpper || t.mechanic === m.id || t.overtimeMechanic === m.id;
+        const assignedUpper = getFinalMechanic(t);
+        return assignedUpper === nameUpper || assignedUpper === m.id.toUpperCase();
       });
       return isBranch || hasTickets;
     });
@@ -414,9 +428,8 @@ export const Performance: React.FC<PerformanceProps> = ({
       const nameUpper = m.name.trim().toUpperCase();
 
       const mechTickets = periodTickets.filter(t => {
-        const mechUpper = t.mechanic?.trim().toUpperCase();
-        const overUpper = t.overtimeMechanic?.trim().toUpperCase();
-        return mechUpper === nameUpper || overUpper === nameUpper || t.mechanic === m.id || t.overtimeMechanic === m.id;
+        const assignedUpper = getFinalMechanic(t);
+        return assignedUpper === nameUpper || assignedUpper === m.id.toUpperCase();
       });
 
       let kendalaCount = 0;
@@ -821,8 +834,49 @@ export const Performance: React.FC<PerformanceProps> = ({
         </div>
       </div>
 
-      {/* HERO METRICS - KEY PERFORM METRICS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* DOMAIN NAVIGATION TAB SWITCHER */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-2 bg-slate-200/80 p-1.5 rounded-2xl w-full sm:w-auto">
+          <button
+            onClick={() => setActiveTab("operational")}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "operational"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
+            }`}
+          >
+            <ClipboardCheck size={16} className={activeTab === "operational" ? themeColorClass : "text-slate-400"} />
+            <span>Kualitas & SOP Operasional</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("mechanics")}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "mechanics"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
+            }`}
+          >
+            <Users size={16} className={activeTab === "mechanics" ? themeColorClass : "text-slate-400"} />
+            <span>Produktivitas & Jam Kerja Mekanik</span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-400 font-bold flex items-center gap-1.5 self-end sm:self-center">
+          <Info size={14} className="text-slate-400" />
+          {activeTab === "operational" ? (
+            <span>Basis Data: <b>Follow-Up Tiket Selesai</b> (Locked / Final)</span>
+          ) : (
+            <span>Basis Data: <b>Tanggal Unit Siap</b> (Cut-off 29 s/d 28)</span>
+          )}
+        </div>
+      </div>
+
+      {/* TAB 1: KUALITAS & SOP OPERASIONAL */}
+      {activeTab === "operational" && (
+        <div className="space-y-8 animate-fadeIn">
+          {/* HERO METRICS - KEY PERFORM METRICS */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Total Service */}
         <div id="stat-total" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
           <div className="absolute top-0 right-0 w-24 h-24 -mr-4 -mt-4 bg-slate-50 rounded-full flex items-center justify-center group-hover:scale-105 transition-all">
@@ -1183,38 +1237,43 @@ export const Performance: React.FC<PerformanceProps> = ({
           </div>
         </div>
       </div>
-
-      {/* PERFORMA SERVICE MEKANIK SECTION */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <Wrench size={20} className={themeColorClass} />
-              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
-                PERFORMA SERVICE MEKANIK
-              </h3>
-            </div>
-            <p className="text-xs text-slate-400 font-bold mt-1">
-              Analisis Kecepatan Pengerjaan Per Layanan (Jam Kerja Aktif 08:00 - 17:00) & Rekap Hasil Kendala
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-600">
-              <Clock size={14} className="text-slate-400" />
-              <span>Jam Kerja Aktif: <b>08:00 - 17:00</b></span>
-            </div>
-
-            <button
-              onClick={handleExportExcel}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition-all cursor-pointer"
-              title={`Download Excel Detail Performa Mekanik (${activePeriod.label})`}
-            >
-              <FileSpreadsheet size={15} />
-              <span>Download Excel</span>
-            </button>
-          </div>
         </div>
+      )}
+
+      {/* TAB 2: PRODUKTIVITAS & JAM KERJA MEKANIK */}
+      {activeTab === "mechanics" && (
+        <div className="space-y-8 animate-fadeIn">
+          {/* PERFORMA SERVICE MEKANIK SECTION */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Wrench size={20} className={themeColorClass} />
+                  <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
+                    PERFORMA SERVICE MEKANIK
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400 font-bold mt-1">
+                  Analisis Kecepatan Pengerjaan Per Layanan (Jam Kerja Aktif 08:00 - 17:00) & Rekap Hasil Kendala
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-600">
+                  <Clock size={14} className="text-slate-400" />
+                  <span>Jam Kerja Aktif: <b>08:00 - 17:00</b></span>
+                </div>
+
+                <button
+                  onClick={handleExportExcel}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition-all cursor-pointer"
+                  title={`Download Excel Detail Performa Mekanik (${activePeriod.label})`}
+                >
+                  <FileSpreadsheet size={15} />
+                  <span>Download Excel</span>
+                </button>
+              </div>
+            </div>
 
         <div className="grid grid-cols-1 gap-6">
           {mechanicServicePerformance.length > 0 ? (
@@ -1344,6 +1403,8 @@ export const Performance: React.FC<PerformanceProps> = ({
           )}
         </div>
       </div>
+        </div>
+      )}
 
       {/* SERVICE DETAIL POP-UP MODAL */}
       {activeServiceModal && (

@@ -831,15 +831,20 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       return `- [${num}] ${t.customerName.toUpperCase()} - ${t.unitSepeda.toUpperCase()} - (${svcs.toUpperCase()}) - ${elapsed}`;
     };
 
+    // Helper to determine the single last assigned mechanic for a ticket
+    const getFinalMechanic = (t: Ticket): string => {
+      const mech = (t.overtimeMechanic && t.overtimeMechanic.trim()) ? t.overtimeMechanic.trim() : (t.mechanic ? t.mechanic.trim() : "");
+      return mech.toUpperCase();
+    };
+
     // Gather all branch mechanics from configuration, supplemented by any historically assigned to today's active tickets.
     const allMechanicNames = new Set<string>();
     mechanics.forEach((m) => {
       if (m && m.name) allMechanicNames.add(m.name.trim().toUpperCase());
     });
     branchSpec.forEach((t) => {
-      if (t.mechanic) allMechanicNames.add(t.mechanic.trim().toUpperCase());
-      if (t.overtimeMechanic)
-        allMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
+      const assigned = getFinalMechanic(t);
+      if (assigned) allMechanicNames.add(assigned);
     });
 
     let mechanicSection = "";
@@ -848,16 +853,14 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       .forEach((picName) => {
         const picCountService = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("TELAT_UPDATE_SERVICE" as any) &&
             (isToday(t.timestamps.called) || isToday(t.timestamps.arrival)),
         ).length;
 
         const monthlyPicCountService = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("TELAT_UPDATE_SERVICE" as any) &&
             (isWithinMonthlyCutoff(t.timestamps.called) ||
               isWithinMonthlyCutoff(t.timestamps.arrival)),
@@ -865,24 +868,21 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
         const picCountSelesai = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("TELAT_UPDATE_SELESAI" as any) &&
             isToday(t.timestamps.ready),
         ).length;
 
         const monthlyPicCountSelesai = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("TELAT_UPDATE_SELESAI" as any) &&
             isWithinMonthlyCutoff(t.timestamps.ready),
         ).length;
 
         const picCountResiHilang = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("RESI_HILANG" as any) &&
             (isToday(t.timestamps.ready) ||
               (t.status === "ready" && isToday(t.timestamps.arrival))),
@@ -890,8 +890,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
 
         const monthlyPicCountResiHilang = branchSpec.filter(
           (t) =>
-            (t.mechanic?.trim().toUpperCase() === picName ||
-              t.overtimeMechanic?.trim().toUpperCase() === picName) &&
+            getFinalMechanic(t) === picName &&
             t.flags?.includes("RESI_HILANG" as any) &&
             (isWithinMonthlyCutoff(t.timestamps.ready) ||
               (t.status === "ready" &&
@@ -899,9 +898,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
         ).length;
 
         const hasActiveCard = branchSpec.some((t) => {
-          const isPIC =
-            t.mechanic?.trim().toUpperCase() === picName ||
-            t.overtimeMechanic?.trim().toUpperCase() === picName;
+          const isPIC = getFinalMechanic(t) === picName;
           const isActiveState =
             t.status === "waiting" ||
             t.status === "active" ||
@@ -1135,43 +1132,70 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
       ),
     ).length;
 
+    // Admin compliance calculation: based on all processed tickets in cutoff
+    const totalProcessedTickets = cutoffTickets.length;
+    const adminPenalties = adminTelatUpdateAntrian + adminTelatFollowUp;
+    const adminComplianceScore = totalProcessedTickets > 0
+      ? Math.max(0, 100 - Math.round((adminPenalties / totalProcessedTickets) * 100))
+      : (adminPenalties > 0 ? 0 : 100);
+
+    // Helper to determine the single last assigned mechanic for a ticket
+    const getFinalMechanic = (t: Ticket): string => {
+      const mech = (t.overtimeMechanic && t.overtimeMechanic.trim()) ? t.overtimeMechanic.trim() : (t.mechanic ? t.mechanic.trim() : "");
+      return mech.toUpperCase();
+    };
+
     const activeMechanicNames = new Set<string>();
     cutoffTickets.forEach((t) => {
-      if (t.mechanic) activeMechanicNames.add(t.mechanic.trim().toUpperCase());
-      if (t.overtimeMechanic)
-        activeMechanicNames.add(t.overtimeMechanic.trim().toUpperCase());
+      const assigned = getFinalMechanic(t);
+      if (assigned) activeMechanicNames.add(assigned);
     });
 
     const sortedMechanicsObj = Array.from(activeMechanicNames).sort();
 
+    const mechanicComplianceScores: number[] = [];
     let mechanicScoresStr = "";
+
     sortedMechanicsObj.forEach((mName) => {
-      const picTelatUpdateService = cutoffTickets.filter((t) => {
-        const isPIC =
-          t.mechanic?.trim().toUpperCase() === mName ||
-          t.overtimeMechanic?.trim().toUpperCase() === mName;
-        return isPIC && t.flags?.includes("TELAT_UPDATE_SERVICE" as any);
-      }).length;
+      const picTickets = cutoffTickets.filter((t) => {
+        return getFinalMechanic(t) === mName;
+      });
 
-      const picTelatUpdateSelesai = cutoffTickets.filter((t) => {
-        const isPIC =
-          t.mechanic?.trim().toUpperCase() === mName ||
-          t.overtimeMechanic?.trim().toUpperCase() === mName;
-        return isPIC && t.flags?.includes("TELAT_UPDATE_SELESAI" as any);
-      }).length;
+      const selesaiPicCount = picTickets.filter((t) => !isGaransiTicket(t)).length;
+      const garansiPicCount = picTickets.filter((t) => isGaransiTicket(t)).length;
+      const totalUnitsHandled = selesaiPicCount + garansiPicCount;
 
-      const picResiHilang = cutoffTickets.filter((t) => {
-        const isPIC =
-          t.mechanic?.trim().toUpperCase() === mName ||
-          t.overtimeMechanic?.trim().toUpperCase() === mName;
-        return isPIC && t.flags?.includes("RESI_HILANG" as any);
-      }).length;
+      const picTelatUpdateService = picTickets.filter((t) =>
+        t.flags?.includes("TELAT_UPDATE_SERVICE" as any)
+      ).length;
+
+      const picTelatUpdateSelesai = picTickets.filter((t) =>
+        t.flags?.includes("TELAT_UPDATE_SELESAI" as any)
+      ).length;
+
+      const picResiHilang = picTickets.filter((t) =>
+        t.flags?.includes("RESI_HILANG" as any)
+      ).length;
+
+      const totalPenalties = picTelatUpdateService + picTelatUpdateSelesai + picResiHilang;
+      const complianceScore = totalUnitsHandled > 0
+        ? Math.max(0, 100 - Math.round((totalPenalties / totalUnitsHandled) * 100))
+        : (totalPenalties > 0 ? 0 : 100);
+
+      mechanicComplianceScores.push(complianceScore);
 
       mechanicScoresStr += `*MEKANIK_PIC_${mName}*\n`;
+      mechanicScoresStr += `- Kepatuhan SOP: ${complianceScore}%\n`;
       mechanicScoresStr += `- Telat Update Service: ${picTelatUpdateService} Unit\n`;
       mechanicScoresStr += `- Telat Update Selesai: ${picTelatUpdateSelesai} Unit\n`;
       mechanicScoresStr += `- Resi Hilang: ${picResiHilang} Unit\n\n`;
     });
+
+    // Kepala Bengkel: check if ALL team members (Admin + all active Mechanics) have compliance >= 90%
+    const allComplianceScores = [adminComplianceScore, ...mechanicComplianceScores];
+    const isKepalaBengkelCompliant =
+      allComplianceScores.length > 0 && allComplianceScores.every((score) => score >= 90);
+    const kepalaBengkelSymbol = isKepalaBengkelCompliant ? "✅" : "❌";
 
     let report = `*REKAP BULANAN: ${currentMonthName} ${currentYear}*\n\n`;
     report += `*1. PERFORMA SERVIS*\n`;
@@ -1180,7 +1204,11 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
     report += `- Bermasalah: ${bermasalahCount} Unit\n\n`;
 
     report += `*2. PERFORMA TIM*\n`;
+    report += `*KEPALA BENGKEL*\n`;
+    report += `- Kepatuhan SOP Tim > 90%: ${kepalaBengkelSymbol}\n\n`;
+
     report += `*ADMIN*\n`;
+    report += `- Kepatuhan SOP: ${adminComplianceScore}%\n`;
     report += `- Telat Update Antrian : ${adminTelatUpdateAntrian} Unit\n`;
     report += `- Telat Follow Up: ${adminTelatFollowUp} Unit\n\n`;
 
@@ -2436,18 +2464,19 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                   )
                                 </div>
                               </label>
-                              {isChecked && t.status === "waiting" && (
+                              {isChecked && (
                                 <div className="pl-8 flex items-center gap-2">
                                   <span className="text-[10px] font-black uppercase text-amber-700 whitespace-nowrap">
                                     Mekanik PIC:
                                   </span>
                                   <select
-                                    value={t.overtimeMechanic || ""}
+                                    value={t.overtimeMechanic || t.mechanic || ""}
                                     onChange={async (e) => {
                                       const val = e.target.value || null;
                                       try {
                                         await updateTicketInCloud(t.id, {
                                           overtimeMechanic: val,
+                                          mechanic: val || t.mechanic,
                                         });
                                       } catch (err) {
                                         console.error(
@@ -2457,7 +2486,7 @@ export const DebriefModal: React.FC<DebriefModalProps> = ({
                                       }
                                     }}
                                     className={`text-xs font-bold border rounded-lg px-2.5 py-1 text-slate-800 outline-none flex-1 max-w-xs bg-white ${
-                                      !t.overtimeMechanic
+                                      !(t.overtimeMechanic || t.mechanic)
                                         ? "border-rose-300 bg-rose-50/50"
                                         : "border-slate-200"
                                     }`}
