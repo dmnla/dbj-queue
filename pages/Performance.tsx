@@ -133,6 +133,14 @@ export const Performance: React.FC<PerformanceProps> = ({
     tickets: Ticket[];
   } | null>(null);
 
+  const [activeTicketListModal, setActiveTicketListModal] = useState<{
+    title: string;
+    subtitle?: string;
+    badgeText?: string;
+    category: "success" | "danger" | "warning" | "info" | "primary";
+    tickets: Ticket[];
+  } | null>(null);
+
   const [modalSearchTerm, setModalSearchTerm] = useState<string>("");
 
   const isMK = currentBranch === "mk";
@@ -268,22 +276,29 @@ export const Performance: React.FC<PerformanceProps> = ({
       return tFinished >= start && tFinished <= end;
     });
 
-    const totalSelesai = filtered.filter(t => !isGaransiTicket(t)).length;
-    const berhasil = filtered.filter(t => isBerhasilTicket(t)).length;
-    const bermasalah = filtered.filter(t => isBermasalahTicket(t)).length;
-    const garansi = filtered.filter(t => isGaransiTicket(t)).length;
+    const totalSelesaiTickets = filtered.filter(t => !isGaransiTicket(t));
+    const berhasilTickets = filtered.filter(t => isBerhasilTicket(t));
+    const bermasalahTickets = filtered.filter(t => isBermasalahTicket(t));
+    const garansiTickets = filtered.filter(t => isGaransiTicket(t));
+
+    const totalSelesai = totalSelesaiTickets.length;
+    const berhasil = berhasilTickets.length;
+    const bermasalah = bermasalahTickets.length;
+    const garansi = garansiTickets.length;
 
     const berhasilPct = totalSelesai > 0 ? Math.round((berhasil / totalSelesai) * 100) : 0;
     const bermasalahPct = totalSelesai > 0 ? Math.round((bermasalah / totalSelesai) * 100) : 0;
 
     // Admin penalties calculated from filtered (truly done tickets)
-    const adminTelatUpdateAntrian = filtered.filter(t => 
+    const adminTelatUpdateAntrianTickets = filtered.filter(t => 
       t.flags?.some(f2 => (f2 as any) === "TELAT_UPDATE_ANTRIAN" || (f2 as any) === "TELAT_UPDATE")
-    ).length;
+    );
+    const adminTelatUpdateAntrian = adminTelatUpdateAntrianTickets.length;
 
-    const adminTelatFollowUp = filtered.filter(t => 
+    const adminTelatFollowUpTickets = filtered.filter(t => 
       t.flags?.some(f2 => (f2 as any) === "TELAT_FOLLOW_UP" || (f2 as any) === "LATE_FOLLOW_UP")
-    ).length;
+    );
+    const adminTelatFollowUp = adminTelatFollowUpTickets.length;
 
     // Helper to determine the single last assigned mechanic for a ticket
     const getFinalMechanic = (t: Ticket): string => {
@@ -300,20 +315,25 @@ export const Performance: React.FC<PerformanceProps> = ({
         return assignedUpper === nameUpper || assignedUpper === m.id.toUpperCase();
       });
 
-      const selesaiPicCount = picTickets.filter(t => !isGaransiTicket(t)).length;
-      const garansiPicCount = picTickets.filter(t => isGaransiTicket(t)).length;
+      const selesaiTickets = picTickets.filter(t => !isGaransiTicket(t));
+      const garansiTickets = picTickets.filter(t => isGaransiTicket(t));
+      const selesaiPicCount = selesaiTickets.length;
+      const garansiPicCount = garansiTickets.length;
 
-      const telatUpdateService = picTickets.filter(t => 
+      const telatUpdateServiceTickets = picTickets.filter(t => 
         t.flags?.includes("TELAT_UPDATE_SERVICE" as any)
-      ).length;
+      );
+      const telatUpdateService = telatUpdateServiceTickets.length;
 
-      const telatUpdateSelesai = picTickets.filter(t => 
+      const telatUpdateSelesaiTickets = picTickets.filter(t => 
         t.flags?.includes("TELAT_UPDATE_SELESAI" as any)
-      ).length;
+      );
+      const telatUpdateSelesai = telatUpdateSelesaiTickets.length;
 
-      const resiHilang = picTickets.filter(t => 
+      const resiHilangTickets = picTickets.filter(t => 
         t.flags?.includes("RESI_HILANG" as any)
-      ).length;
+      );
+      const resiHilang = resiHilangTickets.length;
 
       const totalPenalties = telatUpdateService + telatUpdateSelesai + resiHilang;
       const complianceScore = (selesaiPicCount + garansiPicCount) > 0 
@@ -329,7 +349,13 @@ export const Performance: React.FC<PerformanceProps> = ({
         telatUpdateSelesai,
         resiHilang,
         active: picTickets.length > 0,
-        complianceScore
+        complianceScore,
+        picTickets,
+        selesaiTickets,
+        garansiTickets,
+        telatUpdateServiceTickets,
+        telatUpdateSelesaiTickets,
+        resiHilangTickets
       };
     }).sort((a, b) => b.selesai - a.selesai);
 
@@ -344,9 +370,48 @@ export const Performance: React.FC<PerformanceProps> = ({
       adminTelatFollowUp,
       mechanicPerformance,
       rawFilteredCount: filtered.length,
-      totalProcessed: filtered.length
+      totalProcessed: filtered.length,
+      totalSelesaiTickets,
+      berhasilTickets,
+      bermasalahTickets,
+      garansiTickets,
+      adminTelatUpdateAntrianTickets,
+      adminTelatFollowUpTickets,
+      filteredTickets: filtered
     };
   }, [activePeriod, tickets, mechanics, currentBranch]);
+
+  // Filtered tickets inside the activeTicketListModal for search
+  const filteredModalTickets = useMemo(() => {
+    if (!activeTicketListModal) return [];
+    if (!modalSearchTerm.trim()) return activeTicketListModal.tickets;
+    const q = modalSearchTerm.toLowerCase();
+    return activeTicketListModal.tickets.filter(t => {
+      const cust = (t.customerName || "").toLowerCase();
+      const phone = (t.phone || "").toLowerCase();
+      const bike = (t.unitSepeda || "").toLowerCase();
+      const tNum = (t.ticketNumber || "").toLowerCase();
+      const dpNum = (t.dealposOrderNumber || "").toLowerCase();
+      const mech = (t.overtimeMechanic || t.mechanic || "").toLowerCase();
+      const notes = (t.notes || "").toLowerCase();
+      const res = (t.followUpResult || "").toLowerCase();
+      const services = (t.serviceTypes || []).join(" ").toLowerCase();
+      const flags = (t.flags || []).join(" ").toLowerCase();
+
+      return (
+        cust.includes(q) ||
+        phone.includes(q) ||
+        bike.includes(q) ||
+        tNum.includes(q) ||
+        dpNum.includes(q) ||
+        mech.includes(q) ||
+        notes.includes(q) ||
+        res.includes(q) ||
+        services.includes(q) ||
+        flags.includes(q)
+      );
+    });
+  }, [activeTicketListModal, modalSearchTerm]);
 
   // Compile monthly trend data (last 6 months) for visualization
   const trendData = useMemo(() => {
@@ -878,24 +943,57 @@ export const Performance: React.FC<PerformanceProps> = ({
           {/* HERO METRICS - KEY PERFORM METRICS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Total Service */}
-        <div id="stat-total" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
+        <div 
+          id="stat-total" 
+          onClick={() => {
+            setModalSearchTerm("");
+            setActiveTicketListModal({
+              title: "Daftar Tiket: Total Servis Selesai",
+              subtitle: `Seluruh unit servis selesai (eksklusi garansi) pada periode ${activePeriod.label}`,
+              badgeText: `${stats.totalSelesai} Unit`,
+              category: "info",
+              tickets: stats.totalSelesaiTickets
+            });
+          }}
+          className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
+          title="Klik untuk melihat daftar seluruh unit servis selesai"
+        >
           <div className="absolute top-0 right-0 w-24 h-24 -mr-4 -mt-4 bg-slate-50 rounded-full flex items-center justify-center group-hover:scale-105 transition-all">
-            <FileBarChart2 size={32} className="text-slate-300 transform -rotate-12 group-hover:text-slate-400 transition-all" />
+            <FileBarChart2 size={32} className="text-slate-300 transform -rotate-12 group-hover:text-indigo-400 transition-all" />
           </div>
           <div>
-            <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">TOTAL SERVIS SELESAI</span>
-            <div className="text-5xl font-black text-slate-800 tracking-tight mt-1">
+            <span className="text-[10px] font-black tracking-widest text-slate-400 group-hover:text-indigo-600 uppercase transition-colors">TOTAL SERVIS SELESAI</span>
+            <div className="text-5xl font-black text-slate-800 group-hover:text-indigo-950 tracking-tight mt-1 transition-colors">
               {stats.totalSelesai}
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-[11px] text-slate-500 font-bold uppercase">
-            <Info size={12} className="text-slate-400" />
-            Eksklusi Unit Garansi
+          <div className="mt-4 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1 text-slate-500 font-bold uppercase">
+              <Info size={12} className="text-slate-400" />
+              Eksklusi Unit Garansi
+            </div>
+            <span className="text-indigo-600 font-black text-[10px] flex items-center gap-1 group-hover:underline">
+              Lihat Kartu <Eye size={12} />
+            </span>
           </div>
         </div>
 
         {/* Berhasil */}
-        <div id="stat-berhasil" className="bg-white p-6 rounded-3xl border border-emerald-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
+        <div 
+          id="stat-berhasil" 
+          onClick={() => {
+            setModalSearchTerm("");
+            setActiveTicketListModal({
+              title: "Daftar Unit Selesai (Tingkat Keberhasilan)",
+              subtitle: `Unit berhasil diselesaikan & follow up tuntas pada periode ${activePeriod.label}`,
+              badgeText: `${stats.berhasil} Unit`,
+              category: "success",
+              tickets: stats.berhasilTickets
+            });
+          }}
+          className="bg-white p-6 rounded-3xl border border-emerald-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer"
+          title="Klik untuk melihat daftar unit berhasil selesai"
+        >
           <div className="absolute top-0 right-0 w-24 h-24 -mr-4 -mt-4 bg-emerald-50 rounded-full flex items-center justify-center group-hover:scale-105 transition-all">
             <CheckCircle2 size={32} className="text-emerald-300 transform -rotate-12 group-hover:text-emerald-400 transition-all" />
           </div>
@@ -910,15 +1008,32 @@ export const Performance: React.FC<PerformanceProps> = ({
               </div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex-1">
               <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${stats.berhasilPct}%` }}></div>
             </div>
+            <span className="text-emerald-700 font-black text-[10px] flex items-center gap-1 shrink-0 group-hover:underline">
+              Lihat Kartu <Eye size={12} />
+            </span>
           </div>
         </div>
 
         {/* Bermasalah */}
-        <div id="stat-bermasalah" className="bg-white p-6 rounded-3xl border border-rose-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
+        <div 
+          id="stat-bermasalah" 
+          onClick={() => {
+            setModalSearchTerm("");
+            setActiveTicketListModal({
+              title: "Daftar Unit Masalah (Kendala)",
+              subtitle: `Unit dengan catatan kendala follow up pada periode ${activePeriod.label}`,
+              badgeText: `${stats.bermasalah} Unit`,
+              category: "danger",
+              tickets: stats.bermasalahTickets
+            });
+          }}
+          className="bg-white p-6 rounded-3xl border border-rose-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md hover:border-rose-300 transition-all cursor-pointer"
+          title="Klik untuk melihat daftar unit bermasalah / kendala"
+        >
           <div className="absolute top-0 right-0 w-24 h-24 -mr-4 -mt-4 bg-rose-50 rounded-full flex items-center justify-center group-hover:scale-105 transition-all">
             <XCircle size={32} className="text-rose-300 transform -rotate-12 group-hover:text-rose-400 transition-all" />
           </div>
@@ -933,15 +1048,32 @@ export const Performance: React.FC<PerformanceProps> = ({
               </div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex-1">
               <div className="bg-rose-500 h-full rounded-full transition-all duration-500" style={{ width: `${stats.bermasalahPct}%` }}></div>
             </div>
+            <span className="text-rose-700 font-black text-[10px] flex items-center gap-1 shrink-0 group-hover:underline">
+              Lihat Kartu <Eye size={12} />
+            </span>
           </div>
         </div>
 
         {/* Garansi Auxiliary */}
-        <div id="stat-garansi" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
+        <div 
+          id="stat-garansi" 
+          onClick={() => {
+            setModalSearchTerm("");
+            setActiveTicketListModal({
+              title: "Daftar Unit Klaim Garansi",
+              subtitle: `Unit dengan klaim garansi toko aktif pada periode ${activePeriod.label}`,
+              badgeText: `${stats.garansi} Unit`,
+              category: "warning",
+              tickets: stats.garansiTickets
+            });
+          }}
+          className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md hover:border-amber-300 transition-all cursor-pointer"
+          title="Klik untuk melihat daftar unit klaim garansi"
+        >
           <div className="absolute top-0 right-0 w-24 h-24 -mr-4 -mt-4 bg-slate-50 rounded-full flex items-center justify-center group-hover:scale-105 transition-all">
             <Award size={32} className="text-amber-300 transform -rotate-12 group-hover:text-amber-400 transition-all" />
           </div>
@@ -951,8 +1083,13 @@ export const Performance: React.FC<PerformanceProps> = ({
               {stats.garansi}
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-[11px] text-amber-600 font-bold uppercase bg-amber-50 px-2 py-1 rounded-lg w-fit">
-            Garansi Toko Aktif
+          <div className="mt-4 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1 text-amber-600 font-bold uppercase bg-amber-50 px-2 py-1 rounded-lg w-fit">
+              Garansi Toko Aktif
+            </div>
+            <span className="text-amber-700 font-black text-[10px] flex items-center gap-1 group-hover:underline">
+              Lihat Kartu <Eye size={12} />
+            </span>
           </div>
         </div>
       </div>
@@ -1045,20 +1182,53 @@ export const Performance: React.FC<PerformanceProps> = ({
           </div>
 
           <div className="space-y-2 mt-4">
-            <div className="flex items-center justify-between text-xs font-bold bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <button
+              onClick={() => {
+                setModalSearchTerm("");
+                setActiveTicketListModal({
+                  title: "Daftar Unit Selesai (Tingkat Keberhasilan)",
+                  subtitle: `Unit berhasil diselesaikan pada periode ${activePeriod.label}`,
+                  badgeText: `${stats.berhasil} Unit`,
+                  category: "success",
+                  tickets: stats.berhasilTickets
+                });
+              }}
+              className="w-full flex items-center justify-between text-xs font-bold bg-slate-50 hover:bg-emerald-50/70 p-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 transition-all cursor-pointer group text-left"
+              title="Klik untuk melihat daftar unit selesai"
+            >
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-slate-600">Selesai (Selesai/Internal)</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 group-hover:scale-125 transition-transform" />
+                <span className="text-slate-600 group-hover:text-emerald-800">Selesai (Selesai/Internal)</span>
               </div>
-              <span className="font-black text-slate-900">{stats.berhasil} Unit</span>
-            </div>
-            <div className="flex items-center justify-between text-xs font-bold bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span className="font-black text-slate-900 group-hover:text-emerald-700 flex items-center gap-1">
+                {stats.berhasil} Unit
+                <Eye size={12} className="opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setModalSearchTerm("");
+                setActiveTicketListModal({
+                  title: "Daftar Unit Masalah (Kendala)",
+                  subtitle: `Unit dengan catatan kendala follow up pada periode ${activePeriod.label}`,
+                  badgeText: `${stats.bermasalah} Unit`,
+                  category: "danger",
+                  tickets: stats.bermasalahTickets
+                });
+              }}
+              className="w-full flex items-center justify-between text-xs font-bold bg-slate-50 hover:bg-rose-50/70 p-2.5 rounded-xl border border-slate-100 hover:border-rose-200 transition-all cursor-pointer group text-left"
+              title="Klik untuk melihat daftar unit bermasalah"
+            >
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="text-slate-600">Bermasalah (Kendala)</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500 group-hover:scale-125 transition-transform" />
+                <span className="text-slate-600 group-hover:text-rose-800">Bermasalah (Kendala)</span>
               </div>
-              <span className="font-black text-slate-900">{stats.bermasalah} Unit</span>
-            </div>
+              <span className="font-black text-slate-900 group-hover:text-rose-700 flex items-center gap-1">
+                {stats.bermasalah} Unit
+                <Eye size={12} className="opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -1076,12 +1246,26 @@ export const Performance: React.FC<PerformanceProps> = ({
 
             <div className="space-y-6">
               {/* Penalty 1: Telat Update Antrian */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <div className="text-xs font-black text-slate-700 uppercase tracking-tight">
-                    Telat Update Antrian
+              <div 
+                onClick={() => {
+                  setModalSearchTerm("");
+                  setActiveTicketListModal({
+                    title: "Daftar Tiket: Telat Update Antrian (Admin)",
+                    subtitle: `Unit dengan keterlambatan update pendaftaran antrian (> 15 menit) pada periode ${activePeriod.label}`,
+                    badgeText: `${stats.adminTelatUpdateAntrian} Unit`,
+                    category: "warning",
+                    tickets: stats.adminTelatUpdateAntrianTickets
+                  });
+                }}
+                className="p-3 rounded-2xl border border-transparent hover:border-amber-200 hover:bg-amber-50/40 transition-all cursor-pointer group"
+                title="Klik untuk melihat detail kartu telat update antrian"
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-xs font-black text-slate-700 group-hover:text-amber-800 uppercase tracking-tight flex items-center gap-1.5">
+                    <span>Telat Update Antrian</span>
+                    <Eye size={13} className="text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <div className={`px-2.5 py-1 text-xs font-black rounded-lg ${
+                  <div className={`px-2.5 py-1 text-xs font-black rounded-lg transition-transform group-hover:scale-105 ${
                     stats.adminTelatUpdateAntrian > 0 
                       ? "bg-amber-100 text-amber-700" 
                       : "bg-emerald-50 text-emerald-700"
@@ -1097,18 +1281,35 @@ export const Performance: React.FC<PerformanceProps> = ({
                     style={{ width: `${stats.totalProcessed > 0 ? Math.round((stats.adminTelatUpdateAntrian / stats.totalProcessed) * 100) : 0}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 font-bold leading-normal">
-                  SOP: Admin wajib memperbarui antrian dari parkir/pendaftaran maksimal 15 menit.
-                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[10px] text-slate-400 font-bold leading-normal">
+                    SOP: Admin wajib memperbarui antrian dari parkir/pendaftaran maksimal 15 menit.
+                  </p>
+                  <span className="text-[10px] font-black text-amber-600 underline whitespace-nowrap ml-2">Lihat List</span>
+                </div>
               </div>
 
               {/* Penalty 2: Telat Follow Up */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <div className="text-xs font-black text-slate-700 uppercase tracking-tight">
-                    Telat Follow Up
+              <div 
+                onClick={() => {
+                  setModalSearchTerm("");
+                  setActiveTicketListModal({
+                    title: "Daftar Tiket: Telat Follow Up (Admin)",
+                    subtitle: `Unit dengan keterlambatan follow up kepuasan pelanggan (> 5 hari di follow up) pada periode ${activePeriod.label}`,
+                    badgeText: `${stats.adminTelatFollowUp} Unit`,
+                    category: "danger",
+                    tickets: stats.adminTelatFollowUpTickets
+                  });
+                }}
+                className="p-3 rounded-2xl border border-transparent hover:border-rose-200 hover:bg-rose-50/40 transition-all cursor-pointer group"
+                title="Klik untuk melihat detail kartu telat follow up"
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-xs font-black text-slate-700 group-hover:text-rose-800 uppercase tracking-tight flex items-center gap-1.5">
+                    <span>Telat Follow Up</span>
+                    <Eye size={13} className="text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <div className={`px-2.5 py-1 text-xs font-black rounded-lg ${
+                  <div className={`px-2.5 py-1 text-xs font-black rounded-lg transition-transform group-hover:scale-105 ${
                     stats.adminTelatFollowUp > 0 
                       ? "bg-rose-100 text-rose-700" 
                       : "bg-emerald-50 text-emerald-700"
@@ -1124,9 +1325,12 @@ export const Performance: React.FC<PerformanceProps> = ({
                     style={{ width: `${stats.totalProcessed > 0 ? Math.round((stats.adminTelatFollowUp / stats.totalProcessed) * 100) : 0}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 font-bold leading-normal">
-                  SOP: Admin wajib melakukan follow-up kepuasan pelanggan maksimal 5 hari setelah tiket muncul di kolom Follow Up (total maksimal 8 hari setelah unit diambil).
-                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[10px] text-slate-400 font-bold leading-normal">
+                    SOP: Admin wajib follow-up pelanggan maksimal 5 hari setelah tiket di kolom Follow Up.
+                  </p>
+                  <span className="text-[10px] font-black text-rose-600 underline whitespace-nowrap ml-2">Lihat List</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1179,13 +1383,39 @@ export const Performance: React.FC<PerformanceProps> = ({
                         )}
                       </h4>
                       <div className="flex flex-wrap gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                        <button
+                          onClick={() => {
+                            setModalSearchTerm("");
+                            setActiveTicketListModal({
+                              title: `Daftar Tiket Selesai - Mekanik ${m.name}`,
+                              subtitle: `Unit yang diselesaikan oleh ${m.name} pada periode ${activePeriod.label}`,
+                              badgeText: `${m.selesai} Unit`,
+                              category: "info",
+                              tickets: m.selesaiTickets
+                            });
+                          }}
+                          className="text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 hover:border-slate-300 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                          title="Klik untuk melihat tiket selesai mekanik ini"
+                        >
                           Selesai: <b>{m.selesai} Unit</b>
-                        </span>
+                        </button>
                         {m.garansi > 0 && (
-                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">
+                          <button
+                            onClick={() => {
+                              setModalSearchTerm("");
+                              setActiveTicketListModal({
+                                title: `Daftar Tiket Garansi - Mekanik ${m.name}`,
+                                subtitle: `Unit garansi yang ditangani oleh ${m.name} pada periode ${activePeriod.label}`,
+                                badgeText: `${m.garansi} Unit`,
+                                category: "warning",
+                                tickets: m.garansiTickets
+                              });
+                            }}
+                            className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                            title="Klik untuk melihat tiket garansi mekanik ini"
+                          >
                             Garansi: <b>{m.garansi} Unit</b>
-                          </span>
+                          </button>
                         )}
                         <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
                           m.complianceScore >= 90 
@@ -1202,30 +1432,69 @@ export const Performance: React.FC<PerformanceProps> = ({
 
                   {/* Penalty stats list for each mechanic */}
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5 bg-white px-3 py-2.5 rounded-xl border border-slate-100 sm:w-80 justify-start sm:justify-end text-[10px] font-bold">
-                    <div className="flex items-center justify-between gap-1 w-full sm:w-auto">
-                      <span className="text-slate-400 uppercase font-bold text-[9px]">Telat Update:</span>
-                      <span className={`font-black ${m.telatUpdateService > 0 ? "text-amber-500 animate-pulse" : "text-slate-600"}`}>
+                    <button
+                      onClick={() => {
+                        setModalSearchTerm("");
+                        setActiveTicketListModal({
+                          title: `Daftar Tiket: Telat Update Service - Mekanik ${m.name}`,
+                          subtitle: `Unit dengan keterlambatan update mulai service oleh ${m.name} pada periode ${activePeriod.label}`,
+                          badgeText: `${m.telatUpdateService} Unit`,
+                          category: "warning",
+                          tickets: m.telatUpdateServiceTickets
+                        });
+                      }}
+                      className="flex items-center justify-between gap-1 w-full sm:w-auto hover:bg-amber-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors group"
+                      title="Klik untuk melihat tiket Telat Update Service"
+                    >
+                      <span className="text-slate-400 uppercase font-bold text-[9px] group-hover:text-amber-800">Telat Update:</span>
+                      <span className={`font-black ${m.telatUpdateService > 0 ? "text-amber-600 underline" : "text-slate-600"}`}>
                         {m.telatUpdateService} Unit
                       </span>
-                    </div>
+                    </button>
 
                     <div className="hidden sm:block text-slate-300">|</div>
 
-                    <div className="flex items-center justify-between gap-1 w-full sm:w-auto">
-                      <span className="text-slate-400 uppercase font-bold text-[9px]">Telat Selesai:</span>
-                      <span className={`font-black ${m.telatUpdateSelesai > 0 ? "text-amber-500" : "text-slate-600"}`}>
+                    <button
+                      onClick={() => {
+                        setModalSearchTerm("");
+                        setActiveTicketListModal({
+                          title: `Daftar Tiket: Telat Selesai - Mekanik ${m.name}`,
+                          subtitle: `Unit dengan keterlambatan update selesai/siap diambil oleh ${m.name} pada periode ${activePeriod.label}`,
+                          badgeText: `${m.telatUpdateSelesai} Unit`,
+                          category: "warning",
+                          tickets: m.telatUpdateSelesaiTickets
+                        });
+                      }}
+                      className="flex items-center justify-between gap-1 w-full sm:w-auto hover:bg-amber-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors group"
+                      title="Klik untuk melihat tiket Telat Selesai"
+                    >
+                      <span className="text-slate-400 uppercase font-bold text-[9px] group-hover:text-amber-800">Telat Selesai:</span>
+                      <span className={`font-black ${m.telatUpdateSelesai > 0 ? "text-amber-600 underline" : "text-slate-600"}`}>
                         {m.telatUpdateSelesai} Unit
                       </span>
-                    </div>
+                    </button>
 
                     <div className="hidden sm:block text-slate-300">|</div>
 
-                    <div className="flex items-center justify-between gap-1 w-full sm:w-auto">
-                      <span className="text-slate-400 uppercase font-bold text-[9px]">Resi Hilang:</span>
-                      <span className={`font-black ${m.resiHilang > 0 ? "text-rose-500 font-bold" : "text-slate-600"}`}>
+                    <button
+                      onClick={() => {
+                        setModalSearchTerm("");
+                        setActiveTicketListModal({
+                          title: `Daftar Tiket: Resi Hilang - Mekanik ${m.name}`,
+                          subtitle: `Unit dengan status resi hilang pada tanggung jawab ${m.name} pada periode ${activePeriod.label}`,
+                          badgeText: `${m.resiHilang} Unit`,
+                          category: "danger",
+                          tickets: m.resiHilangTickets
+                        });
+                      }}
+                      className="flex items-center justify-between gap-1 w-full sm:w-auto hover:bg-rose-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors group"
+                      title="Klik untuk melihat tiket Resi Hilang"
+                    >
+                      <span className="text-slate-400 uppercase font-bold text-[9px] group-hover:text-rose-800">Resi Hilang:</span>
+                      <span className={`font-black ${m.resiHilang > 0 ? "text-rose-600 underline" : "text-slate-600"}`}>
                         {m.resiHilang} Unit
                       </span>
-                    </div>
+                    </button>
                   </div>
                 </div>
               ))
@@ -1677,6 +1946,248 @@ export const Performance: React.FC<PerformanceProps> = ({
               <span>Total Unit Kendala: <b className="text-rose-700">{activeKendalaModal.tickets.length} Unit</b></span>
               <button
                 onClick={() => setActiveKendalaModal(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GENERIC TICKET LIST POP-UP MODAL (OPERASIONAL & KEDISIPLINAN SOP) */}
+      {activeTicketListModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className={`p-6 text-white flex items-start justify-between gap-4 ${
+              activeTicketListModal.category === "danger" 
+                ? "bg-rose-950" 
+                : activeTicketListModal.category === "warning"
+                  ? "bg-amber-950"
+                  : activeTicketListModal.category === "success"
+                    ? "bg-emerald-950"
+                    : activeTicketListModal.category === "primary"
+                      ? "bg-indigo-950"
+                      : "bg-slate-900"
+            }`}>
+              <div>
+                <div className="flex items-center gap-2">
+                  {activeTicketListModal.category === "danger" && <AlertTriangle size={20} className="text-rose-400" />}
+                  {activeTicketListModal.category === "warning" && <Award size={20} className="text-amber-400" />}
+                  {activeTicketListModal.category === "success" && <CheckCircle2 size={20} className="text-emerald-400" />}
+                  {activeTicketListModal.category === "info" && <FileBarChart2 size={20} className="text-indigo-400" />}
+                  {activeTicketListModal.category === "primary" && <Shield size={20} className="text-indigo-400" />}
+                  <h3 className="text-lg font-black uppercase tracking-tight">
+                    {activeTicketListModal.title}
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs opacity-90">
+                  {activeTicketListModal.badgeText && (
+                    <span className="font-bold bg-white/15 px-2.5 py-0.5 rounded-md border border-white/20">
+                      Total: <b className="text-white">{activeTicketListModal.badgeText}</b>
+                    </span>
+                  )}
+                  <span>•</span>
+                  <span className="font-medium text-slate-300">
+                    Periode: <b className="text-white">{activePeriod.label}</b>
+                  </span>
+                  {activeTicketListModal.subtitle && (
+                    <>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="text-[11px] text-slate-300 w-full sm:w-auto">
+                        {activeTicketListModal.subtitle}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setActiveTicketListModal(null)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all cursor-pointer shrink-0"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari pelanggan, no tiket, sepeda, mekanik, catatan..."
+                  value={modalSearchTerm}
+                  onChange={(e) => setModalSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              <div className="text-[11px] text-slate-500 font-bold flex items-center justify-between sm:justify-end gap-2">
+                <span>
+                  Menampilkan <b>{filteredModalTickets.length}</b> dari {activeTicketListModal.tickets.length} Unit
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Table Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[750px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                      <th className="py-3 px-3">#</th>
+                      <th className="py-3 px-3">Pelanggan & Kontak</th>
+                      <th className="py-3 px-3">Sepeda / Unit</th>
+                      <th className="py-3 px-3">Layanan</th>
+                      <th className="py-3 px-3">Mekanik PIC</th>
+                      <th className="py-3 px-3">Hasil / Catatan</th>
+                      <th className="py-3 px-3">Pelanggaran SOP</th>
+                      <th className="py-3 px-3 text-right">Tanggal Selesai</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                    {filteredModalTickets.map((t, idx) => {
+                      const formatDT = (dtStr?: string) => {
+                        if (!dtStr) return "-";
+                        const d = new Date(dtStr);
+                        if (isNaN(d.getTime())) return "-";
+                        return d.toLocaleString("id-ID", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        });
+                      };
+
+                      const dateStr = t.timestamps?.finished || t.timestamps?.ready || t.timestamps?.arrival;
+                      const finalMech = (t.overtimeMechanic && t.overtimeMechanic.trim()) 
+                        ? t.overtimeMechanic.trim() 
+                        : (t.mechanic ? t.mechanic.trim() : "-");
+
+                      const isGaransi = isGaransiTicket(t);
+                      const isKendala = isBermasalahTicket(t);
+                      const isBerhasil = isBerhasilTicket(t);
+
+                      // Extract violation flags
+                      const penaltyBadges: { label: string; color: string }[] = [];
+                      if (t.flags?.some(f => (f as any) === "TELAT_UPDATE_ANTRIAN" || (f as any) === "TELAT_UPDATE")) {
+                        penaltyBadges.push({ label: "Telat Antrian", color: "bg-amber-100 text-amber-800 border-amber-200" });
+                      }
+                      if (t.flags?.some(f => (f as any) === "TELAT_FOLLOW_UP" || (f as any) === "LATE_FOLLOW_UP")) {
+                        penaltyBadges.push({ label: "Telat Follow Up", color: "bg-rose-100 text-rose-800 border-rose-200" });
+                      }
+                      if (t.flags?.includes("TELAT_UPDATE_SERVICE" as any)) {
+                        penaltyBadges.push({ label: "Telat Service", color: "bg-amber-100 text-amber-800 border-amber-200" });
+                      }
+                      if (t.flags?.some(f => (f as any) === "TELAT_UPDATE_SELESAI" || (f as any) === "TELAT_SELESAI")) {
+                        penaltyBadges.push({ label: "Telat Selesai", color: "bg-amber-100 text-amber-800 border-amber-200" });
+                      }
+                      if (t.flags?.includes("RESI_HILANG" as any)) {
+                        penaltyBadges.push({ label: "Resi Hilang", color: "bg-rose-100 text-rose-800 border-rose-200" });
+                      }
+
+                      return (
+                        <tr key={t.id || idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5">
+                              {t.ticketNumber && (
+                                <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1 rounded">
+                                  #{t.ticketNumber}
+                                </span>
+                              )}
+                              <div className="font-bold text-slate-900">{t.customerName || "Pelanggan N/A"}</div>
+                            </div>
+                            <div className="font-mono text-[11px] text-slate-500 font-bold">{t.phone || "-"}</div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-slate-800">
+                              {t.unitSepeda || "Sepeda N/A"}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-medium text-slate-600 max-w-[160px]">
+                            <div className="truncate" title={t.serviceTypes?.join(", ")}>
+                              {t.serviceTypes?.join(", ") || "Servis Umum"}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-bold text-slate-800 flex items-center gap-1">
+                              <span>{finalMech}</span>
+                              {t.overtimeMechanic && (
+                                <span className="text-[9px] bg-amber-100 text-amber-800 font-black px-1 rounded">Lembur</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col gap-1">
+                              {isGaransi ? (
+                                <span className="w-fit text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">
+                                  GARANSI
+                                </span>
+                              ) : isKendala ? (
+                                <span className="w-fit text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded">
+                                  KENDALA
+                                </span>
+                              ) : isBerhasil ? (
+                                <span className="w-fit text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded">
+                                  {t.followUpResult || "SELESAI"}
+                                </span>
+                              ) : (
+                                <span className="w-fit text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                  {t.followUpResult || "-"}
+                                </span>
+                              )}
+                              {t.notes && (
+                                <div className="text-[11px] text-slate-500 italic max-w-xs truncate" title={t.notes}>
+                                  {t.notes}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            {penaltyBadges.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {penaltyBadges.map((badge, bIdx) => (
+                                  <span
+                                    key={bIdx}
+                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${badge.color}`}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-emerald-600 font-bold text-[10px] flex items-center gap-1">
+                                <Check size={12} /> Tertib SOP
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right text-slate-500 font-medium whitespace-nowrap">
+                            {formatDT(dateStr)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredModalTickets.length === 0 && (
+                <div className="text-center py-12 text-slate-400 text-xs font-semibold">
+                  Tidak ada kartu / unit yang cocok dengan pencarian.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span>
+                Total: <b className="text-slate-800 font-black">{filteredModalTickets.length} Unit</b>
+              </span>
+              <button
+                onClick={() => setActiveTicketListModal(null)}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition-all cursor-pointer"
               >
                 Tutup
