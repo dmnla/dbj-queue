@@ -24,8 +24,11 @@ import {
   Zap,
   FileSpreadsheet,
   ClipboardCheck,
-  Users
+  Users,
+  FileCheck2,
+  ExternalLink
 } from "lucide-react";
+import MonthlyReconciliationTab from "../components/MonthlyReconciliationTab";
 
 /**
  * Calculates active working time in milliseconds between two timestamps.
@@ -110,7 +113,7 @@ export const Performance: React.FC<PerformanceProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<"monthly" | "yearly">("monthly");
   const [selectedPeriodIndex, setSelectedPeriodIndex] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<"operational" | "mechanics">("operational");
+  const [activeTab, setActiveTab] = useState<"operational" | "mechanics" | "reconciliation">("operational");
 
   // Popout modal states for mechanic service & kendala
   const [activeServiceModal, setActiveServiceModal] = useState<{
@@ -900,11 +903,11 @@ export const Performance: React.FC<PerformanceProps> = ({
       </div>
 
       {/* DOMAIN NAVIGATION TAB SWITCHER */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-2 bg-slate-200/80 p-1.5 rounded-2xl w-full sm:w-auto">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-2 bg-slate-200/80 p-1.5 rounded-2xl w-full lg:w-auto overflow-x-auto">
           <button
             onClick={() => setActiveTab("operational")}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "operational"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
@@ -916,7 +919,7 @@ export const Performance: React.FC<PerformanceProps> = ({
 
           <button
             onClick={() => setActiveTab("mechanics")}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "mechanics"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
@@ -925,14 +928,28 @@ export const Performance: React.FC<PerformanceProps> = ({
             <Users size={16} className={activeTab === "mechanics" ? themeColorClass : "text-slate-400"} />
             <span>Produktivitas & Jam Kerja Mekanik</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("reconciliation")}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === "reconciliation"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
+            }`}
+          >
+            <FileCheck2 size={16} className={activeTab === "reconciliation" ? "text-emerald-600" : "text-slate-400"} />
+            <span>Rekonsiliasi & Rekap WhatsApp</span>
+          </button>
         </div>
 
-        <div className="text-xs text-slate-400 font-bold flex items-center gap-1.5 self-end sm:self-center">
+        <div className="text-xs text-slate-400 font-bold flex items-center gap-1.5 self-end lg:self-center">
           <Info size={14} className="text-slate-400" />
           {activeTab === "operational" ? (
             <span>Basis Data: <b>Follow-Up Tiket Selesai</b> (Locked / Final)</span>
-          ) : (
+          ) : activeTab === "mechanics" ? (
             <span>Basis Data: <b>Tanggal Unit Siap</b> (Cut-off 29 s/d 28)</span>
+          ) : (
+            <span>Basis Data: <b>Justifikasi Masalah & Laporan Final WhatsApp</b></span>
           )}
         </div>
       </div>
@@ -940,6 +957,31 @@ export const Performance: React.FC<PerformanceProps> = ({
       {/* TAB 1: KUALITAS & SOP OPERASIONAL */}
       {activeTab === "operational" && (
         <div className="space-y-8 animate-fadeIn">
+          {/* RECONCILIATION ANNOUNCEMENT / SHORTCUT BANNER */}
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 rounded-3xl p-5 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm border border-emerald-900/40">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400 shrink-0 border border-emerald-500/30">
+                <FileCheck2 size={22} />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-black uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+                  <span>Rekonsiliasi Masalah Bulanan & Rekap WhatsApp</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 text-[10px]">Tersedia</span>
+                </div>
+                <p className="text-xs text-slate-300 font-medium">
+                  Ada temuan telat antrian, telat follow-up, atau resi hilang yang punya alasan sah? Berikan dispensasi (write-off) untuk evaluasi bersih dan salin format WhatsApp.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab("reconciliation")}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap self-end sm:self-auto cursor-pointer shadow-xs hover:scale-105"
+            >
+              <span>Buka Rekonsiliasi</span>
+              <ExternalLink size={14} />
+            </button>
+          </div>
+
           {/* HERO METRICS - KEY PERFORM METRICS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Total Service */}
@@ -1673,6 +1715,22 @@ export const Performance: React.FC<PerformanceProps> = ({
         </div>
       </div>
         </div>
+      )}
+
+      {/* TAB 3: REKONSILIASI & REKAP BULANAN WHATSAPP */}
+      {activeTab === "reconciliation" && (
+        <MonthlyReconciliationTab
+          tickets={tickets}
+          mechanics={mechanics}
+          currentBranch={currentBranch}
+          activePeriod={activePeriod}
+          isMK={isMK}
+          themeColorClass={themeColorClass}
+          themeBgClass={themeBgClass}
+          themeBorderClass={themeBorderClass}
+          onOpenTicketListModal={setActiveTicketListModal}
+          onBackToOperational={() => setActiveTab("operational")}
+        />
       )}
 
       {/* SERVICE DETAIL POP-UP MODAL */}

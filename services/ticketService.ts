@@ -1397,6 +1397,22 @@ export const updateTicketInCloud = async (id: string, updates: any) => {
   await updateDoc(ticketRef, updates);
 };
 
+export const reconcileTicketInCloud = async (
+  ticketId: string,
+  isWrittenOff: boolean,
+  reason?: string,
+  reviewerName?: string
+) => {
+  if (!db) return;
+  const ticketRef = doc(db, "tickets", ticketId);
+  await updateDoc(ticketRef, {
+    isWrittenOff,
+    writeOffReason: isWrittenOff ? (reason || "") : deleteField(),
+    writtenOffAt: isWrittenOff ? new Date().toISOString() : deleteField(),
+    writtenOffBy: isWrittenOff ? (reviewerName || "Supervisor") : deleteField(),
+  });
+};
+
 export const subscribeToOperationalStatus = (
   branch: Branch,
   onUpdate: (data: {

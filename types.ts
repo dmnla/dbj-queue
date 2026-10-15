@@ -68,6 +68,11 @@ export interface Ticket {
   overtimeMechanic?: string | null;
   activeTimer?: string; // Format: "DD:HH:MM:SS"
   pauseTimer?: string;  // Format: "DD:HH:MM:SS"
+  // Reconciliation fields
+  isWrittenOff?: boolean;
+  writeOffReason?: string;
+  writtenOffAt?: string; // ISO string
+  writtenOffBy?: string;
 }
 
 export interface KpiData {
